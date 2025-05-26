@@ -1,6 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles, Users, Heart } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const CTA = () => {
   return (
@@ -53,10 +54,12 @@ const CTA = () => {
         </p>
         
         <div className="flex flex-col sm:flex-row gap-6 justify-center mb-16">
-          <Button size="lg" className="group bg-white text-purple-700 hover:bg-purple-50 text-xl px-12 py-8 shadow-2xl hover:shadow-white/20 transition-all duration-300">
-            Find Your Tribe Now
-            <ArrowRight className="ml-2 w-6 h-6 group-hover:translate-x-1 transition-transform" />
-          </Button>
+          <Link to="/signup">
+            <Button size="lg" className="group bg-white text-purple-700 hover:bg-purple-50 text-xl px-12 py-8 shadow-2xl hover:shadow-white/20 transition-all duration-300">
+              Find Your Tribe Now
+              <ArrowRight className="ml-2 w-6 h-6 group-hover:translate-x-1 transition-transform" />
+            </Button>
+          </Link>
           
           <Button size="lg" variant="outline" className="border-2 border-white text-white hover:bg-white/10 text-xl px-12 py-8 backdrop-blur-sm transition-all duration-300">
             Watch Demo

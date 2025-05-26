@@ -1,6 +1,6 @@
-
 import { Button } from "@/components/ui/button";
 import { ArrowDown, Users, Heart } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Hero = () => {
   return (
@@ -24,6 +24,20 @@ const Hero = () => {
             <circle cx="600" cy="700" r="4" fill="#ec4899" className="animate-pulse delay-500"/>
           </svg>
         </div>
+      </div>
+
+      {/* Navigation bar */}
+      <div className="absolute top-6 right-6 z-20 flex items-center space-x-4">
+        <Link to="/login">
+          <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 backdrop-blur-sm">
+            Login
+          </Button>
+        </Link>
+        <Link to="/signup">
+          <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white">
+            Sign Up
+          </Button>
+        </Link>
       </div>
 
       {/* Floating community bubbles */}
@@ -63,9 +77,11 @@ const Hero = () => {
         </p>
         
         <div className="flex flex-col sm:flex-row gap-6 justify-center mb-16">
-          <Button size="lg" className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-lg px-10 py-6 shadow-xl">
-            Find Your Tribe
-          </Button>
+          <Link to="/signup">
+            <Button size="lg" className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-lg px-10 py-6 shadow-xl">
+              Find Your Tribe
+            </Button>
+          </Link>
           <Button size="lg" variant="outline" className="border-2 border-white text-white hover:bg-white hover:text-purple-900 text-lg px-10 py-6 backdrop-blur-sm">
             How It Works
           </Button>
