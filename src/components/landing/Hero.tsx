@@ -26,6 +26,13 @@ const Hero = () => {
         </div>
       </div>
 
+      {/* Logo in top-left */}
+      <div className="absolute top-6 left-6 z-20">
+        <Link to="/">
+          <img src="/tribe white.png" alt="App Logo" className="h-10 w-10" />
+        </Link>
+      </div>
+
       {/* Navigation bar */}
       <div className="absolute top-6 right-6 z-20 flex items-center space-x-4">
         <Link to="/login">

@@ -1,21 +1,26 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Heart, Mail, Lock, User, ArrowRight, Upload } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Upload, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { toast } from 'sonner';
+import { useAuth } from '../lib/auth-context';
 
 const Signup = () => {
+  const navigate = useNavigate();
+  const { signup } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     surname: '',
     email: '',
     username: '',
     password: '',
+    confirmPassword: '',
     gender: '',
     bio: '',
     profilePhoto: null as File | null
@@ -29,6 +34,10 @@ const Signup = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
+    if (file && !file.type.match(/^image\/(jpg|jpeg|png|gif|webp)$/)) {
+      toast.error('Please upload a valid image file (jpg, jpeg, png, gif, or webp)');
+      return;
+    }
     setFormData(prev => ({ ...prev, profilePhoto: file }));
   };
 
@@ -36,19 +45,41 @@ const Signup = () => {
     e.preventDefault();
     
     if (!acceptTerms) {
-      alert('Please accept the terms and conditions');
+      toast.error('Please accept the terms and conditions');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error('Password must be at least 6 characters long');
       return;
     }
 
     setIsLoading(true);
     
-    // TODO: Integrate with backend API
-    console.log('Signup attempt:', formData);
-    
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const formDataToSend = new FormData();
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== null && value !== '') {
+          formDataToSend.append(key, value);
+        } else if (key === 'profilePhoto' && value === null) {
+          // Optionally append a placeholder or handle null explicitly if backend expects the key
+          // formDataToSend.append(key, ''); // Or handle on backend
+        }
+      });
+
+      await signup(formDataToSend);
+      toast.success('Account created successfully!');
+      navigate('/login');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to create account');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -67,7 +98,7 @@ const Signup = () => {
               whileHover={{ scale: 1.05 }}
               transition={{ type: "spring", stiffness: 400, damping: 17 }}
             >
-              <Heart className="w-7 h-7 text-white" />
+              <img src="/tribe white.png" alt="App Logo" className="h-10 w-10" />
             </motion.div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               Tribe
@@ -176,6 +207,27 @@ const Signup = () => {
                   placeholder="••••••••"
                   className="pl-12 h-12 bg-gray-50/50 border-gray-200 focus:border-purple-300 focus:ring-purple-200"
                   required
+                  minLength={6}
+                />
+              </div>
+            </div>
+
+            {/* Confirm Password */}
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">
+                Confirm Password
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+                  placeholder="••••••••"
+                  className="pl-12 h-12 bg-gray-50/50 border-gray-200 focus:border-purple-300 focus:ring-purple-200"
+                  required
+                  minLength={6}
                 />
               </div>
             </div>
@@ -263,12 +315,9 @@ const Signup = () => {
               className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl font-semibold transition-all duration-300 group disabled:opacity-50"
             >
               {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin mx-auto" />
               ) : (
-                <>
-                  Join Tribe
-                  <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-                </>
+                'Create Account'
               )}
             </Button>
           </form>
