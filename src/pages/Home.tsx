@@ -112,7 +112,7 @@ export default function Home() {
               <img
                 src={post.base64Image}
                 alt="Post"
-                className="mb-4 w-full rounded-2xl object-cover shadow-lg"
+                className="mb-4 w-full rounded-2xl object-contain shadow-lg"
               />
             )}
             <div className="flex items-center space-x-6">

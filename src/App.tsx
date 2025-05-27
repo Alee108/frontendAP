@@ -15,6 +15,7 @@ const TribeProfile = lazy(() => import('./pages/TribeProfile'));
 const Landing = lazy(() => import('./pages/Landing'));
 const DiscoverTribes = lazy(() => import('./pages/DiscoverTribes'));
 const Profile = lazy(() => import('./pages/Profile'));
+const CreatePostPage = lazy(() => import('./pages/CreatePostPage'));
 
 function App() {
   return (
@@ -91,6 +92,18 @@ function App() {
                   <Layout>
                     <Profile />
                   </Layout>
+                }
+              />
+
+              {/* New route for Create Post Page */}
+              <Route
+                path="/create-post"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <CreatePostPage />
+                    </Layout>
+                  </ProtectedRoute>
                 }
               />
 

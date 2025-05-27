@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Home, Users, User, LogOut, Search } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
+import { PlusCircle } from 'lucide-react';
 
 export default function Navbar() {
   const location = useLocation();
@@ -37,6 +38,17 @@ export default function Navbar() {
               <Home className="h-6 w-6" />
               <span className="hidden md:inline">Home</span>
             </Link>
+
+            {/* Create Post Button and Dialog Trigger - Changed to Link */}
+            {user && ( // Only show if user is logged in
+              <Link 
+                to="/create-post"
+                className={`flex items-center gap-2 transition-colors text-gray-700 hover:text-purple-600`}
+              >
+                <PlusCircle className="h-6 w-6" />
+                <span className="hidden md:inline">Create Post</span>
+              </Link>
+            )}
 
             <Link 
               to="/search" 

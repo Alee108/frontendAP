@@ -165,6 +165,8 @@ export interface Post {
   likes: number;
   comments: number;
   liked: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Comment {
@@ -326,8 +328,8 @@ export const apiService = {
   },
 
   // Posts
-  getHomeFeed: async () => {
-    const response = await api.get<Post[]>('/posts/home');
+  getRecommendedPosts: async () => {
+    const response = await api.get<Post[]>('/posts');
     return response.data;
   },
 
@@ -387,8 +389,12 @@ export const apiService = {
   },
 
   // Tribes
-  createTribe: async (tribeData: any) => {
-    const response = await api.post<Tribe>('/tribes', tribeData);
+  createTribe: async (formData: FormData) => {
+    const response = await api.post<Tribe>('/tribes', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 
@@ -417,6 +423,15 @@ export const apiService = {
     return response.data;
   },
 
+  updateTribePhoto: async (tribeId: string, formData: FormData) => {
+    const response = await api.patch<Tribe>(`/tribes/${tribeId}/profile-photo`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
   handleMembershipRequest: async (tribeId: string, userId: string, action: 'approve' | 'reject') => {
     const response = await api.patch<any>(`/tribes/${tribeId}/membership/${userId}`, { action });
     return response.data;
@@ -438,7 +453,7 @@ export const apiService = {
   },
 
   requestMembership: async (tribeId: string) => {
-    const response = await api.post(`/tribes/${tribeId}/join`);
+    const response = await api.post(`/tribes/join/${tribeId}`);
     return response.data;
   },
 
@@ -485,6 +500,16 @@ export const apiService = {
 
   exitTribe: async (userId: string, tribeId: string) => {
     const response = await api.patch(`/membership/exit/${userId}/${tribeId}`);
+    return response.data;
+  },
+
+  // Posts
+  createPost: async (formData: FormData) => {
+    const response = await api.post<Post>('/posts', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 };

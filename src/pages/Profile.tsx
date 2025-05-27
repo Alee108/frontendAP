@@ -229,12 +229,11 @@ export default function Profile() {
          }
 
          try {
-            const userMembershipsData = await apiService.getUserMembershipRequests(currentUser._id);
+            const userMembershipsData = await apiService.getUserMemberships(currentUser._id);
             setUserMemberships(userMembershipsData);
          } catch (error) {
-            // This is the error we are currently seeing (404 for /membership/user/{userId})
             console.error('Failed to load user memberships:', error);
-            // toast.error('Failed to load user memberships.'); // Avoid too many toasts on initial load if multiple fail
+            toast.error('Unable to load your tribes. Please try again later.');
             setUserMemberships([]);
          }
       } else {
@@ -449,59 +448,102 @@ export default function Profile() {
             </div>
             
             <div className="flex-grow text-center md:text-left">
-              {/* Username field - editable */}
-              {isEditing ? (
-                 <div className="mb-2">
-                   <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
-                   <Input
-                     id="username"
-                     type="text"
-                     name="username"
-                     value={formData.username || ''}
-                     onChange={handleInputChange}
-                     placeholder="Username"
-                     className="mt-1 text-xl font-bold"
-                   />
-                 </div>
-              ) : (
-                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{user.username}</h1>
-              )}
-             
-              {/* Name field - editable */}
-              {isEditing ? (
-                 <div className="mb-2">
-                   <label htmlFor="name" className="block text-sm font-medium text-gray-700">Name</label>
-                   <Input
-                     id="name"
-                     type="text"
-                     name="name"
-                     value={formData.name || ''}
-                     onChange={handleInputChange}
-                     placeholder="Your Name"
-                     className="mt-1"
-                   />
-                 </div>
-              ) : (
-                 user.name && <p className="text-gray-600 mb-2">{user.name}</p>
-              )}
+              {/* Top row: Username/Name/Surname and My Tribes */}
+              <div className="flex flex-col md:flex-row justify-between gap-4 mb-4 items-start">
+                {/* Username/Name/Surname Block */}
+                <div className="flex flex-col">
+                   {isEditing ? (
+                      <div className="mb-2">
+                        <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
+                        <Input
+                          id="username"
+                          type="text"
+                          name="username"
+                          value={formData.username || ''}
+                          onChange={handleInputChange}
+                          placeholder="Username"
+                          className="mt-1 text-xl font-bold"
+                        />
+                      </div>
+                   ) : (
+                      <h1 className="text-3xl font-bold text-gray-900 mb-2">{user.username}</h1>
+                   )}
+                  
+                   {isEditing ? (
+                      <div className="mb-2">
+                        <label htmlFor="name" className="block text-sm font-medium text-gray-700">Name</label>
+                        <Input
+                          id="name"
+                          type="text"
+                          name="name"
+                          value={formData.name || ''}
+                          onChange={handleInputChange}
+                          placeholder="Your Name"
+                          className="mt-1"
+                        />
+                      </div>
+                   ) : (
+                      user.name && <p className="text-gray-600 mb-2">{user.name}</p>
+                   )}
 
-              {/* Surname field - editable */}
-              {isEditing ? (
-                 <div className="mb-2">
-                   <label htmlFor="surname" className="block text-sm font-medium text-gray-700">Surname</label>
-                   <Input
-                     id="surname"
-                     type="text"
-                     name="surname"
-                     value={formData.surname || ''}
-                     onChange={handleInputChange}
-                     placeholder="Your Surname"
-                     className="mt-1"
-                   />
-                 </div>
-              ) : (
-                 user.surname && <p className="text-gray-600 mb-2">{user.surname}</p>
-              )}
+                   {isEditing ? (
+                      <div className="mb-2">
+                        <label htmlFor="surname" className="block text-sm font-medium text-gray-700">Surname</label>
+                        <Input
+                          id="surname"
+                          type="text"
+                          name="surname"
+                          value={formData.surname || ''}
+                          onChange={handleInputChange}
+                          placeholder="Your Surname"
+                          className="mt-1"
+                        />
+                      </div>
+                   ) : (
+                      user.surname && <p className="text-gray-600 mb-2">{user.surname}</p>
+                   )}
+
+                </div>
+
+                {/* My Tribes Section - Only for current user - Moved and Styled */}
+                {isCurrentUser && userMemberships.length > 0 && (
+                  <div className="md:ml-auto flex-shrink-0">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      My Tribes
+                    </h3>
+                    <div className="flex flex-col gap-2">
+                      {userMemberships.map(tribe => {
+                        const isFounderOfTribe = tribe.founder._id === user?._id;
+
+                        return (
+                          <Link 
+                            key={tribe._id}
+                            to={`/tribes/${tribe._id}`}
+                            className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 rounded-lg px-3 py-2 transition-colors"
+                          >
+                            <img
+                              src={tribe.profilePhoto || TRIBE_PLACEHOLDER_IMAGE}
+                              alt={tribe.name}
+                              className="w-8 h-8 rounded-full object-cover"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = TRIBE_PLACEHOLDER_IMAGE;
+                              }}
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-gray-900">{tribe.name}</span>
+                              <span className="text-xs text-purple-600">
+                                {isFounderOfTribe ? 'Founder' : 'Member'}
+                              </span>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Bio field - editable */}
               {isEditing ? (
@@ -662,79 +704,6 @@ export default function Profile() {
             </div>
           )}
         </div>
-
-        {/* User Memberships Section - Only for current user */}
-        {isCurrentUser && userMemberships.length > 0 && ( // Check userMemberships length
-          <div className="mt-8 bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-xl border border-white/20">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Users className="h-6 w-6" />
-              My Tribes
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {userMemberships.map(tribe => (
-                <div key={tribe._id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={tribe.profilePhoto || TRIBE_PLACEHOLDER_IMAGE}
-                      alt={tribe.name}
-                      className="w-12 h-12 rounded-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = TRIBE_PLACEHOLDER_IMAGE;
-                      }}
-                    />
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{tribe.name}</h3>
-                      {/* Display membership role if available */}
-                      {user && tribe.memberships?.find(m => m.user._id === user._id)?.role && (
-                         <p className="text-sm text-gray-500">{tribe.memberships.find(m => m.user._id === user._id)!.role}</p>
-                      )}
-                    </div>
-                     {/* Future: Link to tribe profile */}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* User Membership Requests Section - This section is now handled by the dialog */}
-        {/* {isCurrentUser && membershipRequests.length > 0 && (
-          <div className="mt-8 bg-white/80 backdrop-blur-xl rounded-3xl p-8 shadow-xl border border-white/20">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Users className="h-6 w-6" />
-              Pending Membership Requests
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {membershipRequests.map(tribe => (
-                <div key={tribe._id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={tribe.profilePhoto || TRIBE_PLACEHOLDER_IMAGE}
-                      alt={tribe.name}
-                      className="w-12 h-12 rounded-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = TRIBE_PLACEHOLDER_IMAGE;
-                      }}
-                    />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{tribe.name}</h3>
-                      <p className="text-sm text-gray-500">{tribe.description}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/tribes/${tribe._id}`)}
-                    >
-                      View
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )} */}
 
         {/* Modals/Components for Followers/Following Lists */}
         <UserListDialog 
