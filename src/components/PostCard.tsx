@@ -80,7 +80,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
         <img
           src={post.base64Image}
           alt="Post content"
-          className="w-full rounded-lg mb-4 object-cover"
+          className="w-full rounded-lg mb-4 object-contain"
         />
       )}
 
