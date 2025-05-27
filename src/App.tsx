@@ -5,17 +5,18 @@ import { Layout } from './components/Layout';
 import { Toaster } from 'sonner';
 import { Suspense, lazy } from 'react';
 import React from 'react';
+import { Home } from './pages/Home';
 
 // Lazy load pages for better performance
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
-const Home = lazy(() => import('./pages/Home'));
 const Search = lazy(() => import('./pages/Search'));
 const TribeProfile = lazy(() => import('./pages/TribeProfile'));
 const Landing = lazy(() => import('./pages/Landing'));
 const DiscoverTribes = lazy(() => import('./pages/DiscoverTribes'));
 const Profile = lazy(() => import('./pages/Profile'));
 const CreatePostPage = lazy(() => import('./pages/CreatePostPage'));
+const Chat = lazy(() => import('./pages/Chat'));
 
 function App() {
   return (
@@ -31,7 +32,7 @@ function App() {
           <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
             <Routes>
               {/* Public routes */}
-              <Route path="/" element={<Landing />} />
+              <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
 
@@ -102,6 +103,18 @@ function App() {
                   <ProtectedRoute>
                     <Layout>
                       <CreatePostPage />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* New route for Chat Page */}
+              <Route
+                path="/chat"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Chat />
                     </Layout>
                   </ProtectedRoute>
                 }

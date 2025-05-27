@@ -684,20 +684,42 @@ export default function Profile() {
             <p className="text-center text-gray-600">No posts yet.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {userPosts.map(post => (
-                <div key={post.id} className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl border border-white/20">
-                   {post.base64Image && (
+              {userPosts.map((post) => (
+                <div key={post._id} className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl border border-white/20 mb-6">
+                  <div className="flex items-center gap-4 mb-4">
+                    {post.userId?.profilePhoto ? (
+                      <img
+                        src={post.userId.profilePhoto}
+                        alt={post.userId.username}
+                        className="w-10 h-10 rounded-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = USER_PLACEHOLDER_IMAGE;
+                        }}
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                        <UserIcon className="w-6 h-6 text-purple-500" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{post.userId?.username || 'Unknown User'}</h3>
+                      <p className="text-sm text-gray-500">{new Date(post.createdAt).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  
+                  {post.base64Image && (
                     <img
                       src={post.base64Image}
                       alt={post.description}
                       className="w-full h-48 object-cover rounded-xl mb-4"
                     />
                   )}
+                  
                   <p className="text-gray-700 mb-4">{post.description}</p>
+                  
                   {post.location && (
-                    <p className="text-sm text-gray-500 flex items-center gap-1">
-                      <MapPin className="h-4 w-4"/> {post.location}
-                    </p>
+                    <p className="text-sm text-gray-500">{post.location}</p>
                   )}
                 </div>
               ))}

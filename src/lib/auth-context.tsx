@@ -19,37 +19,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Get token directly from verifyToken (now sync)
-    const token = apiService.verifyToken();
-    
-    if (token) {
-      // If token exists, try to get user from storage
-      const currentUser = apiService.getCurrentUser();
-      if (currentUser) {
-        setUser(currentUser);
-      } else {
-         // If token exists but user data is not in storage, consider it logged out
-         apiService.logout(); // Clear invalid token and user data
-      }
+    // Get user from storage
+    const currentUser = apiService.getCurrentUser();
+    if (currentUser) {
+      setUser(currentUser);
     }
-    // Set loading to false after checking token and user data
     setLoading(false);
   }, []); // Empty dependency array means this runs once on mount
 
   const login = async (email: string, password: string) => {
-    const { token, user } = await apiService.login(email, password);
-    localStorage.setItem('token', token);
-    setUser(user);
-    navigate('/home');
+    try {
+      const response = await apiService.login(email, password);
+      setUser(response.user);
+      navigate('/home');
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   };
 
   const signup = async (formData: FormData) => {
-    await apiService.signup(formData);
-    navigate('/login');
+    try {
+      await apiService.signup(formData);
+      navigate('/login');
+    } catch (error) {
+      console.error('Signup error:', error);
+      throw error;
+    }
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    apiService.logout();
     setUser(null);
     navigate('/login');
   };
