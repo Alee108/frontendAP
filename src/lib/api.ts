@@ -571,7 +571,7 @@ export const apiService = {
   },
 
   requestMembership: async (tribeId: string) => {
-    const response = await axiosInstance.patch(`/tribes/${tribeId}/join`);
+    const response = await axiosInstance.post(`/tribes/${tribeId}/join`);
     return response.data;
   },
 
