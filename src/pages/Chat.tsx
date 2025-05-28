@@ -64,96 +64,26 @@ export default function Chat() {
       }
 
       const relevantChatId = message.sender._id === user._id ? message.receiver._id : message.sender._id;
+      const messageContent = message.message || message.message_text;
 
+      // Update chats list
       setChats(prevChats => {
-         const chatIndex = prevChats.findIndex(chat => 
-           chat && chat.userId && chat.userId === relevantChatId
-         );
+        const chatIndex = prevChats.findIndex(chat => chat.userId === relevantChatId);
+        let updatedChats = [...prevChats];
 
-          let updatedChats = [...prevChats];
-
-          if (chatIndex > -1) {
-            const chatToUpdate = { ...updatedChats[chatIndex] };
-            const isDuplicate = chatToUpdate.messages.some(msg => 
-              msg.id === message.id || 
-              (msg.message === (message.message || message.message_text) && 
-               msg.senderId === message.sender._id && 
-               msg.receiverId === message.receiver._id)
-            );
-            
-            if (!isDuplicate) {
-               const newMessage: SimplifiedMessage = {
-                 id: message.id,
-                 message: message.message || message.message_text,
-                 sender: message.sender,
-                 receiver: message.receiver,
-                 sent_at: message.sent_at,
-                 senderId: message.sender._id,
-                 receiverId: message.receiver._id
-               };
-
-               if (message.sender._id === user._id) {
-                 chatToUpdate.messages = chatToUpdate.messages.map(msg => 
-                   msg.id.startsWith('temp-') && msg.message === (message.message || message.message_text) ? newMessage : msg
-                 );
-               } else {
-                 chatToUpdate.messages = [...chatToUpdate.messages, newMessage];
-               }
-
-               chatToUpdate.lastMessage = {
-                 text: message.message || message.message_text,
-                 sent_at: message.sent_at
-               };
-               updatedChats[chatIndex] = chatToUpdate;
-             }
-           } else {
-            console.log('Creating new chat entry for received message', message);
-            const otherUser = message.sender._id === user._id ? message.receiver : message.sender;
-            const newChat: ChatInfo = {
-              userId: otherUser._id,
-              username: otherUser.username,
-              email: otherUser.email,
-              profilePhoto: otherUser.profilePhoto,
-              messages: [{
-                id: message.id,
-                message: message.message || message.message_text,
-                sender: message.sender,
-                receiver: message.receiver,
-                sent_at: message.sent_at,
-                senderId: message.sender._id,
-                receiverId: message.receiver._id
-              }],
-              lastMessage: {
-                text: message.message || message.message_text,
-                sent_at: message.sent_at
-              }
-            };
-            updatedChats = [newChat, ...updatedChats];
-          }
-
-           updatedChats.sort((a, b) => {
-               const lastMsgA = a.lastMessage?.sent_at;
-               const lastMsgB = b.lastMessage?.sent_at;
-               if (!lastMsgA) return 1;
-               if (!lastMsgB) return -1;
-               return new Date(lastMsgB).getTime() - new Date(lastMsgA).getTime();
-           });
-
-           return updatedChats;
-       });
-
-       if (selectedChat && relevantChatId === selectedChat) {
-          setMessages(prev => {
-            if (prev.some(msg => 
-              msg.id === message.id || 
-              (msg.message === (message.message || message.message_text) && 
-               msg.senderId === message.sender._id && 
-               msg.receiverId === message.receiver._id)
-            )) return prev;
-            
+        if (chatIndex > -1) {
+          const chatToUpdate = { ...updatedChats[chatIndex] };
+          const isDuplicate = chatToUpdate.messages.some(msg => 
+            msg.id === message.id || 
+            (msg.message === messageContent && 
+             msg.senderId === message.sender._id && 
+             msg.receiverId === message.receiver._id)
+          );
+          
+          if (!isDuplicate) {
             const newMessage: SimplifiedMessage = {
               id: message.id,
-              message: message.message || message.message_text,
+              message: messageContent,
               sender: message.sender,
               receiver: message.receiver,
               sent_at: message.sent_at,
@@ -161,44 +91,124 @@ export default function Chat() {
               receiverId: message.receiver._id
             };
 
+            // If this is a confirmation of our own message, replace the temporary message
             if (message.sender._id === user._id) {
-              return prev.map(msg => 
-                msg.id.startsWith('temp-') && msg.message === (message.message || message.message_text) ? newMessage : msg
+              chatToUpdate.messages = chatToUpdate.messages.map(msg => 
+                msg.id.startsWith('temp-') && msg.message === messageContent ? newMessage : msg
               );
+            } else {
+              chatToUpdate.messages = [...chatToUpdate.messages, newMessage];
             }
 
-            return [...prev, newMessage];
-          });
-       }
+            chatToUpdate.lastMessage = {
+              text: messageContent,
+              sent_at: message.sent_at
+            };
+            updatedChats[chatIndex] = chatToUpdate;
+          }
+        } else {
+          console.log('Creating new chat entry for received message', message);
+          const otherUser = message.sender._id === user._id ? message.receiver : message.sender;
+          const newChat: ChatInfo = {
+            userId: otherUser._id,
+            username: otherUser.username,
+            email: otherUser.email,
+            profilePhoto: otherUser.profilePhoto,
+            messages: [{
+              id: message.id,
+              message: messageContent,
+              sender: message.sender,
+              receiver: message.receiver,
+              sent_at: message.sent_at,
+              senderId: message.sender._id,
+              receiverId: message.receiver._id
+            }],
+            lastMessage: {
+              text: messageContent,
+              sent_at: message.sent_at
+            }
+          };
+          updatedChats = [newChat, ...updatedChats];
+        }
+
+        // Sort chats by last message time
+        updatedChats.sort((a, b) => {
+          const lastMsgA = a.lastMessage?.sent_at;
+          const lastMsgB = b.lastMessage?.sent_at;
+          if (!lastMsgA) return 1;
+          if (!lastMsgB) return -1;
+          return new Date(lastMsgB).getTime() - new Date(lastMsgA).getTime();
+        });
+
+        return updatedChats;
+      });
+
+      // Update current chat messages if this chat is selected
+      if (selectedChat && relevantChatId === selectedChat) {
+        setMessages(prev => {
+          const isDuplicate = prev.some(msg => 
+            msg.id === message.id || 
+            (msg.message === messageContent && 
+             msg.senderId === message.sender._id && 
+             msg.receiverId === message.receiver._id)
+          );
+          
+          if (isDuplicate) return prev;
+          
+          const newMessage: SimplifiedMessage = {
+            id: message.id,
+            message: messageContent,
+            sender: message.sender,
+            receiver: message.receiver,
+            sent_at: message.sent_at,
+            senderId: message.sender._id,
+            receiverId: message.receiver._id
+          };
+
+          // If this is a confirmation of our own message, replace the temporary message
+          if (message.sender._id === user._id) {
+            return prev.map(msg => 
+              msg.id.startsWith('temp-') && msg.message === messageContent ? newMessage : msg
+            );
+          }
+
+          return [...prev, newMessage];
+        });
+      }
     };
 
-    const handleSocketError = (error: Error) => {
+    // Set up socket event listeners
+    socket.on('receive', handleReceiveMessage);
+    socket.on('error', (error: Error) => {
       console.error('Socket error:', error);
       toast.error('Connection error. Please try refreshing the page.');
-    };
-
-    const handleSocketDisconnect = (reason: string) => {
+    });
+    socket.on('disconnect', (reason: string) => {
       console.log('Socket disconnected:', reason);
-      toast.error('Connection lost. Please refresh the page to reconnect.');
-    };
+      if (reason === 'io server disconnect') {
+        toast.warning('Connection lost. Please refresh the page.');
+      } else if (reason === 'transport close') {
+        toast.warning('Connection closed. Attempting to reconnect...');
+      } else if (reason === 'ping timeout') {
+        toast.warning('Connection timeout. Attempting to reconnect...');
+      }
+    });
 
-    socket.on('receive', handleReceiveMessage);
-    socket.on('error', handleSocketError);
-    socket.on('disconnect', handleSocketDisconnect);
-
+    // Initial fetch of chats
     if (user._id) {
-        fetchChats(user._id);
+      fetchChats(user._id);
     }
 
+    // Cleanup
     return () => {
       console.log('First useEffect cleanup running');
       if (socket) {
         socket.off('receive', handleReceiveMessage);
-        socket.off('error', handleSocketError);
-        socket.off('disconnect', handleSocketDisconnect);
+        socket.off('error');
+        socket.off('disconnect');
       }
     };
-  }, [user?._id, authLoading, socket, fetchChats]);
+  }, [user?._id, authLoading, socket, fetchChats, selectedChat]);
 
   useEffect(() => {
     console.log('Second useEffect running:', { selectedChat, user, chats: chats.length });
@@ -305,10 +315,12 @@ export default function Chat() {
     const tempMessageId = 'temp-' + Date.now();
     console.log('Sending message via socket:', messageData);
     
+    // Add error handling for socket emit
     socket.emit('send', messageData, (error: Error | null) => {
       if (error) {
         console.error('Error sending message:', error);
         toast.error('Failed to send message. Please try again.');
+        // Remove the temporary message if sending failed
         setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
         setChats(prevChats => {
           const chatIndex = prevChats.findIndex(chat => chat.userId === selectedChat);
@@ -399,7 +411,7 @@ export default function Chat() {
    console.log('Rendering chat interface:', { user, selectedChat, chats: chats.length, messages: messages.length });
 
   return (
-    <div className="flex h-screen antialiased text-gray-800">
+    <div className="flex h-calc(100vh-64px) antialiased text-gray-800">
       <div className="flex flex-row h-full w-full overflow-x-hidden">
         <div className="flex flex-col py-8 pl-6 pr-2 w-80 bg-white flex-shrink-0">
           <div className="flex flex-row items-center justify-center h-12 w-full">
