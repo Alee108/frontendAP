@@ -7,7 +7,7 @@ import { Loader2, Heart, MessageCircle, Users, Lock, Globe, User as UserIcon } f
 import { CommentSection } from '../components/CommentSection';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '../lib/auth-context';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 // Placeholder images
 const TRIBE_PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80';
@@ -25,6 +25,8 @@ export default function TribeProfile() {
   const [loadingComments, setLoadingComments] = useState<Record<string, boolean>>({});
   const [joining, setJoining] = useState(false);
   const [showMembersList, setShowMembersList] = useState(false);
+  const [showExitDialog, setShowExitDialog] = useState(false);
+  const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
     const fetchTribeData = async () => {
@@ -43,6 +45,13 @@ export default function TribeProfile() {
             liked: post.likes.includes(user?._id || '')
         }));
         setPosts(postsWithLikedStatus);
+
+        // Se la tribe è chiusa e l'utente non è il founder, reindirizza al discover
+        if (tribeData.status === 'CLOSED' && tribeData.founder._id !== user?._id) {
+          toast.info('This tribe is closed.');
+          navigate('/discover');
+        }
+
       } catch (error) {
         toast.error('Failed to load tribe data');
         navigate('/discover');
@@ -126,7 +135,7 @@ export default function TribeProfile() {
   };
 
   const handleJoinTribe = async () => {
-    if (!tribeId) return;
+    if (!tribeId || isClosed) return;
     
     setJoining(true);
     try {
@@ -147,6 +156,42 @@ export default function TribeProfile() {
       );
     } finally {
       setJoining(false);
+    }
+  };
+
+  const handleExitTribe = async () => {
+    if (!user || !tribeId) return;
+    
+    setExiting(true);
+    try {
+      if (isFounderOfTribe) {
+        // Se è il founder, chiudiamo la tribe chiamando l'endpoint dedicato
+        await apiService.closeTribe(tribeId);
+        toast.success('Tribe has been closed. Members can still view posts but no new join requests will be accepted.');
+        // Aggiornare lo stato locale per mostrare la vista chiusa immediatamente
+        setTribe(prevTribe => prevTribe ? { ...prevTribe, status: 'CLOSED' } : null);
+        // NON reindirizzare immediatamente per i founder, così vedono la pagina aggiornata
+      } else {
+        // Se è un membro normale, usciamo dalla tribe
+        if (!user?._id) {
+          toast.error('User ID is missing.');
+          setExiting(false);
+          setShowExitDialog(false);
+          return;
+        }
+        await apiService.exitTribe(user._id, tribeId);
+        toast.success('Successfully left the tribe');
+        // Azzerare lo stato della tribe e dei post per riflettere l'uscita
+        setTribe(null);
+        setPosts([]);
+        // Reindirizza alla pagina Discover solo DOPO il successo dell'operazione e l'aggiornamento dello stato locale per i membri
+        navigate('/discover');
+      }
+    } catch (error) {
+      toast.error('Failed to exit tribe');
+    } finally {
+      setExiting(false);
+      setShowExitDialog(false);
     }
   };
 
@@ -172,14 +217,15 @@ export default function TribeProfile() {
   const isMember = tribe.memberships.some(m => m.status === 'ACTIVE');
   const hasPendingRequest = tribe.memberships.some(m => m.status === 'PENDING');
   const isPrivate = tribe.visibility === 'PRIVATE';
+  const isClosed = tribe.status === 'CLOSED';
   const isFounderOfTribe = tribe.founder._id === user?._id;
   const isAlreadyInTribe = isFounderOfTribe || isMember;
 
   // Calculate total active members including founder, moderators, and members
   const totalActiveMembers = tribe.memberships.filter(m => m.status === 'ACTIVE').length;
 
-  // If tribe is private and user is not a member, show limited view
-  if (isPrivate && !isMember) {
+  // Se la tribe è chiusa, mostriamo una vista speciale
+  if (isClosed) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 py-8 px-4">
         <div className="max-w-4xl mx-auto">
@@ -189,7 +235,7 @@ export default function TribeProfile() {
                 <img
                   src={tribe.profilePhoto || TRIBE_PLACEHOLDER_IMAGE}
                   alt={tribe.name}
-                  className="w-32 h-32 rounded-full object-cover ring-4 ring-purple-200"
+                  className="w-32 h-32 rounded-full object-cover ring-4 ring-gray-200"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.src = TRIBE_PLACEHOLDER_IMAGE;
@@ -199,46 +245,83 @@ export default function TribeProfile() {
               
               <div className="flex-grow text-center md:text-left">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{tribe.name}</h1>
-                <p className="text-gray-500 mb-4">This is a private tribe. Request to join to see more details.</p>
+                <p className="text-gray-500 mb-4">This tribe is closed. You can view posts but cannot join.</p>
                 
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex items-center gap-2 text-gray-700">
-                    <Lock className="h-5 w-5 text-red-500" />
-                    <span>Private Tribe</span>
+                    <Lock className="h-5 w-5 text-gray-500" />
+                    <span>Closed Tribe</span>
                   </div>
                 </div>
 
-                {/* Show join/request buttons if not already a member */}
-                {!isAlreadyInTribe && !hasPendingRequest && (
-                  <Button
-                    onClick={handleJoinTribe}
-                    disabled={joining}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-                  >
-                    {joining ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Requesting...
-                      </>
+                {/* Mostra i post se la tribe è pubblica o se l'utente è un membro */}
+                {(isMember || !isPrivate) && (
+                  <div className="mt-8">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Posts</h2>
+                    {posts.length === 0 ? (
+                      <p className="text-center text-gray-600">No posts yet</p>
                     ) : (
-                      'Request to Join'
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {posts.map(post => (
+                          <div key={post._id} className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl border border-white/20">
+                            <div className="flex items-center gap-4 mb-4">
+                              {post.userId?.profilePhoto ? (
+                                <img
+                                  src={post.userId.profilePhoto}
+                                  alt={post.userId.username}
+                                  className="w-10 h-10 rounded-full object-cover"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.src = USER_PLACEHOLDER_IMAGE;
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                                  <UserIcon className="w-6 h-6 text-purple-500" />
+                                </div>
+                              )}
+                              <div>
+                                <h3 className="font-semibold text-gray-900">{post.userId?.username || 'Unknown User'}</h3>
+                                <p className="text-sm text-gray-500">{new Date(post.createdAt).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                            
+                            {post.base64Image && (
+                              <img
+                                src={post.base64Image}
+                                alt={post.description}
+                                className="w-full h-48 object-cover rounded-xl mb-4"
+                              />
+                            )}
+                            
+                            <p className="text-gray-700 mb-4">{post.description}</p>
+                            
+                            {post.location && (
+                              <p className="text-sm text-gray-500">{post.location}</p>
+                            )}
+
+                            {/* Like and Comment Counts */}
+                            <div className="flex items-center gap-4 mt-4">
+                              <div className="flex items-center gap-1 text-gray-600">
+                                <Heart className={`h-5 w-5 cursor-pointer ${post.liked ? 'text-red-500 fill-red-500' : 'text-gray-500'}`} onClick={() => handleLike(post._id)} />
+                                <span>{post.likes.length}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-gray-600 cursor-pointer" onClick={() => setExpandedPost(expandedPost === post._id ? null : post._id)}>
+                                <MessageCircle className="h-5 w-5" />
+                                <span>{post.commentCount}</span>
+                              </div>
+                            </div>
+
+                            {/* Comment Section */}
+                            {expandedPost === post._id && (
+                              <CommentSection postId={post._id} comments={comments[post._id] || []} onCommentAdded={(comment) => handleCommentAdded(post._id, comment)} />
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </Button>
+                  </div>
                 )}
-                
-                {hasPendingRequest && !isAlreadyInTribe && (
-                  <Button disabled className="bg-gray-100 text-gray-500">
-                    Request Pending
-                  </Button>
-                )}
-
-                {/* Show Already a Member if is member but not founder */}
-                 {isAlreadyInTribe && !isFounderOfTribe && (
-                  <Button disabled className="bg-gray-100 text-gray-500 mt-4">
-                    {'Already a Member'}
-                  </Button>
-                )}
-
               </div>
             </div>
           </div>
@@ -315,7 +398,7 @@ export default function TribeProfile() {
             </div>
 
             {/* Only show the main join/request button if not already a member and no pending request */}
-            {!isAlreadyInTribe && !hasPendingRequest && (
+            {!isAlreadyInTribe && !hasPendingRequest && !isClosed && (
               <Button
                 onClick={handleJoinTribe}
                 disabled={joining}
@@ -334,7 +417,7 @@ export default function TribeProfile() {
 
             {/* Show 'Already a Member' button only if member AND NOT founder, positioned lower */}
             {isAlreadyInTribe && !isFounderOfTribe && (
-              <Button disabled className="bg-gray-100 text-gray-500 mt-4">
+              <Button disabled className="bg-gray-100 text-gray-500 text-sm px-3 py-1.5 h-8">
                 {'Already a Member'}
               </Button>
             )}
@@ -344,6 +427,31 @@ export default function TribeProfile() {
               <Button disabled className="bg-gray-100 text-gray-500">
                 Request Pending
               </Button>
+            )}
+
+            {/* Aggiungi il pulsante di uscita nella sezione dei membri */}
+            {isAlreadyInTribe && (
+              <div className="mt-6 flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowExitDialog(true)}
+                  className={`px-4 py-2 text-sm rounded-full border border-red-300 bg-red-50/80 hover:bg-red-100/80 text-red-600 hover:text-red-700 transition-colors duration-200 ${
+                    isFounderOfTribe ? 'flex items-center gap-1.5' : 'flex items-center gap-1.5'
+                  }`}
+                >
+                  {isFounderOfTribe ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      Close Tribe
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-3.5 h-3.5" />
+                      Leave Tribe
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
 
           </div>
@@ -507,6 +615,48 @@ export default function TribeProfile() {
                     </div>
                   </div>
                 ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog di conferma per l'uscita */}
+        <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+          <DialogContent className="sm:max-w-[425px] bg-white/95 backdrop-blur-xl border border-white/20">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-gray-900">
+                {isFounderOfTribe ? 'Close Tribe' : 'Leave Tribe'}
+              </DialogTitle>
+              <DialogDescription className="text-gray-600 mt-2">
+                {isFounderOfTribe 
+                  ? 'Are you sure you want to close this tribe? Members will still be able to view posts, but no new join requests will be accepted.'
+                  : 'Are you sure you want to leave this tribe? You will no longer have access to tribe posts and discussions.'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-3 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowExitDialog(false)}
+                disabled={exiting}
+                className="rounded-lg border border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50 text-sm px-3 py-1.5 h-8"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleExitTribe}
+                disabled={exiting}
+                className={`rounded-lg border border-red-300 bg-red-50/80 hover:bg-red-100/80 text-red-600 hover:text-red-700 text-sm px-3 py-1.5 h-8 transition-colors duration-200 ${
+                  isFounderOfTribe ? 'flex items-center gap-1.5' : 'flex items-center gap-1.5'
+                }`}
+              >
+                {exiting ? (
+                  <>
+                    <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+                    {isFounderOfTribe ? 'Closing...' : 'Leaving...'}
+                  </>
+                ) : (
+                  isFounderOfTribe ? 'Close Tribe' : 'Leave Tribe'
+                )}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
