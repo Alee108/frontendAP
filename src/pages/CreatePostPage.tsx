@@ -14,7 +14,12 @@ export default function CreatePostPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [postData, setPostData] = useState({ description: '', location: '', tribeId: '' });
+  const [postData, setPostData] = useState({
+    description: '',
+    location: '',
+    tribeId: '',
+    base64Image: ''
+  });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [userTribes, setUserTribes] = useState<Tribe[]>([]);
@@ -73,66 +78,81 @@ export default function CreatePostPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-       if (!allowedTypes.includes(file.type)) {
-           toast.error('Only JPG, PNG, GIF, and WebP images are allowed.');
-           setImageFile(null);
-           setImagePreviewUrl(null);
-           if (e.target) e.target.value = '';
-           return;
-       }
-       const maxSize = 5 * 1024 * 1024;
-       if (file.size > maxSize) {
-           toast.error('Image file size must be less than 5MB.');
-           setImageFile(null);
-           setImagePreviewUrl(null);
-           if (e.target) e.target.value = '';
-           return;
-       }
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Only JPG, PNG, GIF, and WebP images are allowed.');
+        setImageFile(null);
+        setImagePreviewUrl(null);
+        setPostData(prev => ({ ...prev, base64Image: '' }));
+        if (e.target) e.target.value = '';
+        return;
+      }
+      const maxSize = 5 * 1024 * 1024;
+      if (file.size > maxSize) {
+        toast.error('Image file size must be less than 5MB.');
+        setImageFile(null);
+        setImagePreviewUrl(null);
+        setPostData(prev => ({ ...prev, base64Image: '' }));
+        if (e.target) e.target.value = '';
+        return;
+      }
 
       setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImagePreviewUrl(reader.result as string);
+        const base64 = reader.result as string;
+        setImagePreviewUrl(base64);
+        setPostData(prev => ({ ...prev, base64Image: base64 }));
       };
       reader.readAsDataURL(file);
     } else {
       setImageFile(null);
       setImagePreviewUrl(null);
+      setPostData(prev => ({ ...prev, base64Image: '' }));
     }
   };
 
   const handleCreatePost = async () => {
-    if (!postData.description.trim() || !postData.tribeId || !imageFile) {
-        // This should ideally be prevented by button disabled state, but good for safety
-        toast.error('Please fill all required fields (Description and Photo).');
-        return;
+    if (!user || !userTribes.length) return;
+    
+    // Validazione dei campi obbligatori
+    if (!postData.description.trim()) {
+      toast.error('Please enter a description');
+      return;
+    }
+    if (!postData.location.trim()) {
+      toast.error('Please enter a location');
+      return;
+    }
+    if (!postData.base64Image) {
+      toast.error('Please select an image');
+      return;
     }
 
     setIsCreatingPost(true);
-    const formData = new FormData();
-    formData.append('description', postData.description);
-    formData.append('tribeId', postData.tribeId);
-    if (postData.location.trim()) {
-      formData.append('location', postData.location);
-    }
-    formData.append('image', imageFile); // Image is mandatory now
-
     try {
+      const formData = new FormData();
+      formData.append('description', postData.description);
+      formData.append('location', postData.location);
+      formData.append('tribeId', userTribes[0]._id);
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
       await apiService.createPost(formData);
       toast.success('Post created successfully!');
-      // Redirect to Home or Tribe page after successful creation
-      navigate('/home'); // Or navigate(`/tribes/${postData.tribeId}`);
+      navigate(`/tribes/${userTribes[0]._id}`);
     } catch (error) {
       console.error('Error creating post:', error);
-      toast.error('Failed to create post.');
+      toast.error('Failed to create post');
+    } finally {
       setIsCreatingPost(false);
     }
   };
 
   const handleDiscard = () => {
       // Reset form state and navigate away
-      setPostData({ description: '', location: '', tribeId: '' });
+      setPostData({ description: '', location: '', tribeId: '', base64Image: '' });
       setImageFile(null);
       setImagePreviewUrl(null);
       setShowPreview(false); // Hide preview if visible

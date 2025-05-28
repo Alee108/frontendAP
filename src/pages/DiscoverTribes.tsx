@@ -154,6 +154,7 @@ export default function DiscoverTribes() {
     const activeMembers = tribe.memberships?.filter(m => m.status === 'ACTIVE').length || 0;
     const founderUsername = tribe.founder?.username || 'Unknown';
     const isPrivate = tribe.visibility === 'PRIVATE';
+    const isClosed = tribe.status === 'CLOSED';
     const isFounderOfTribe = tribe.founder._id === user?._id;
     const isMemberOfTribe = tribe.memberships?.some(m => m.user._id === user?._id && m.status === 'ACTIVE');
     const isAlreadyInTribe = isFounderOfTribe || isMemberOfTribe;
@@ -163,7 +164,7 @@ export default function DiscoverTribes() {
         <img
           src={tribe.profilePhoto}
           alt={tribe.name}
-          className="w-24 h-24 rounded-full object-cover mb-4 ring-2 ring-purple-200"
+          className={`w-24 h-24 rounded-full object-cover mb-4 ring-2 ${isClosed ? 'ring-gray-200' : 'ring-purple-200'}`}
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.src = TRIBE_PLACEHOLDER_IMAGE;
@@ -171,7 +172,22 @@ export default function DiscoverTribes() {
         />
         <h2 className="text-xl font-semibold text-gray-900 mb-2">{tribe.name}</h2>
         
-        {isPrivate ? (
+        {isClosed ? (
+          <>
+            <div className="flex items-center space-x-2 text-gray-700 text-sm mb-4">
+              <Lock className="h-4 w-4 text-gray-500" />
+              <span>Closed Tribe</span>
+            </div>
+            <p className="text-gray-500 text-sm mb-4">This tribe is closed. You can view posts but cannot join.</p>
+            <Link to={`/tribes/${tribe._id}`} className="w-full mt-auto">
+              <Button 
+                className="w-full bg-gray-100 text-gray-500 hover:bg-gray-200 rounded-xl"
+              >
+                View Posts
+              </Button>
+            </Link>
+          </>
+        ) : isPrivate ? (
           <>
             <div className="flex items-center space-x-2 text-gray-700 text-sm mb-4">
               <Lock className="h-4 w-4 text-red-500" />

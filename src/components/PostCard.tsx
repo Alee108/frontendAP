@@ -14,7 +14,7 @@ interface PostCardProps {
 export function PostCard({ post, onPostUpdate }: PostCardProps) {
   const [comment, setComment] = useState('');
   const { user } = useAuth();
-  const [isLiked, setIsLiked] = useState(post.likes?.includes(user?._id || '') || false);
+  const [isLiked, setIsLiked] = useState(post.likes.includes(user?._id || ''));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleLike = async () => {
@@ -58,7 +58,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
         {post.userId.profilePhoto ? (
           <img
             src={post.userId.profilePhoto}
-            alt={post.userId.username || 'User'}
+            alt={post.userId.username}
             className="w-10 h-10 rounded-full mr-3 object-cover"
           />
         ) : (
@@ -76,13 +76,11 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
 
       <p className="mb-4">{post.description}</p>
       
-      {post.base64Image && (
-        <img
-          src={post.base64Image}
-          alt="Post content"
-          className="w-full rounded-lg mb-4 object-contain"
-        />
-      )}
+      <img
+        src={post.base64Image}
+        alt="Post content"
+        className="w-full rounded-lg mb-4 object-contain"
+      />
 
       <div className="flex items-center gap-4 mb-4">
         <button
@@ -90,11 +88,11 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
           className={`flex items-center gap-1 ${isLiked ? 'text-red-500' : 'text-gray-500'}`}
         >
           <Heart className={isLiked ? 'fill-current' : ''} />
-          <span>{post.likes?.length || 0}</span>
+          <span>{post.likes.length}</span>
         </button>
         <div className="flex items-center gap-1 text-gray-500">
           <MessageCircle />
-          <span>{post.comments?.length || 0}</span>
+          <span>{post.comments.length}</span>
         </div>
         <span className="text-sm text-gray-500">
           {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
@@ -118,15 +116,15 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
         </button>
       </form>
 
-      {post.comments && post.comments.length > 0 && (
+      {post.comments.length > 0 && (
         <div className="mt-4 space-y-2">
           {post.comments.map((comment) => (
             <div key={comment._id} className="bg-gray-50 p-3 rounded-lg">
               <div className="flex items-center gap-2 mb-1">
-                {comment.userId?.profilePhoto ? (
+                {comment.userId.profilePhoto ? (
                   <img
                     src={comment.userId.profilePhoto}
-                    alt={comment.userId.username || 'User'}
+                    alt={comment.userId.username}
                     className="w-6 h-6 rounded-full object-cover"
                   />
                 ) : (
@@ -134,7 +132,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
                     <User className="w-4 h-4 text-gray-500" />
                   </div>
                 )}
-                <span className="font-medium">{comment.userId?.username || 'user'}</span>
+                <span className="font-medium">{comment.userId.username}</span>
               </div>
               <p className="text-sm">{comment.content}</p>
             </div>
