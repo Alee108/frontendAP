@@ -32,7 +32,7 @@ function App() {
           <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
             <Routes>
               {/* Public routes */}
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
 
@@ -90,13 +90,13 @@ function App() {
               <Route
                 path="/profile/:userId"
                 element={
-                  <Layout>
-                    <Profile />
-                  </Layout>
+                  <ProtectedRoute>
+                    <Layout>
+                      <Profile />
+                    </Layout>
+                  </ProtectedRoute>
                 }
               />
-
-              {/* New route for Create Post Page */}
               <Route
                 path="/create-post"
                 element={
@@ -107,8 +107,6 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-
-              {/* New route for Chat Page */}
               <Route
                 path="/chat"
                 element={

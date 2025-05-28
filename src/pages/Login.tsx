@@ -1,22 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/auth-context';
 import { toast } from 'sonner';
 import { Mail, Lock, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { apiService } from '../lib/api';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Verifica sia l'utente che il token
+    const token = apiService.verifyToken();
+    if (user && token) {
+      const from = location.state?.from?.pathname || '/home';
+      console.log('Login - Redirecting to:', from);
+      navigate(from, { replace: true });
+    }
+  }, [user, location, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       await login(email, password);
-    } catch (error) {
-      toast.error('Invalid email or password');
+      const token = apiService.verifyToken();
+      if (token) {
+        const from = location.state?.from?.pathname || '/home';
+        console.log('Login successful - Redirecting to:', from);
+        navigate(from, { replace: true });
+      } else {
+        throw new Error('Login successful but token not found');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast.error(error.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }

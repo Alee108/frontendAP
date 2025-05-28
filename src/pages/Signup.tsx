@@ -63,20 +63,20 @@ const Signup = () => {
     
     try {
       const formDataToSend = new FormData();
-      Object.entries(formData).forEach(([key, value]) => {
-        if (value !== null && value !== '') {
-          formDataToSend.append(key, value);
-        } else if (key === 'profilePhoto' && value === null) {
-          // Optionally append a placeholder or handle null explicitly if backend expects the key
-          // formDataToSend.append(key, ''); // Or handle on backend
-        }
-      });
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('surname', formData.surname);
+      formDataToSend.append('email', formData.email);
+      formDataToSend.append('username', formData.username);
+      formDataToSend.append('password', formData.password);
+      formDataToSend.append('gender', formData.gender);
+      formDataToSend.append('bio', formData.bio);
+      
+      if (formData.profilePhoto) {
+        formDataToSend.append('profilePhoto', formData.profilePhoto);
+      }
 
       await signup(formDataToSend);
-      toast.success('Account created successfully!');
-      navigate('/login');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create account');
     } finally {
       setIsLoading(false);
     }

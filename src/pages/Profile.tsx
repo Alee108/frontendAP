@@ -151,7 +151,7 @@ export default function Profile() {
     setShowFollowersList(false);
     setShowFollowingList(false);
     if (id) {
-      navigate(`/profile/${id}`, { replace: true });
+      navigate(`/profile/${id}`);
     }
   }, [navigate]);
 
@@ -165,84 +165,69 @@ export default function Profile() {
       setLoading(true);
       let fetchedUser: User | null = null;
       const currentUser = apiService.getCurrentUser();
-      const idToFetch = userId || currentUser?._id; 
+      const idToFetch = userId || currentUser?._id;
 
       if (!idToFetch) {
-         navigate('/login');
-         return;
+        navigate('/login');
+        return;
       }
 
-      // 1. Fetch user data
       try {
+        // 1. Fetch user data
         fetchedUser = await apiService.getUserById(idToFetch);
         setUser(fetchedUser);
 
         if (currentUser && fetchedUser) {
-             setIsFollowing(fetchedUser.followers?.some(followerId => followerId === currentUser._id) || false);
+          setIsFollowing(fetchedUser.followers?.some(followerId => followerId === currentUser._id) || false);
         }
 
         if (fetchedUser) {
-           setFormData({
-             username: fetchedUser.username || '',
-             name: fetchedUser.name || '',
-             surname: fetchedUser.surname || '',
-             bio: fetchedUser.bio || '',
-             profilePhoto: fetchedUser.profilePhoto || '',
-           });
-           setFollowersCount(fetchedUser.followers?.length || 0);
-           setFollowingCount(fetchedUser.following?.length || 0);
+          setFormData({
+            username: fetchedUser.username || '',
+            name: fetchedUser.name || '',
+            surname: fetchedUser.surname || '',
+            bio: fetchedUser.bio || '',
+            profilePhoto: fetchedUser.profilePhoto || '',
+          });
+          setFollowersCount(fetchedUser.followers?.length || 0);
+          setFollowingCount(fetchedUser.following?.length || 0);
         }
 
-      } catch (error) {
-        toast.error('Failed to load user data.');
-        setUser(null); // Critical error, cannot display profile
-        
-        // Only redirect to login if trying to view own profile while not logged in
-        const currentLoggedInUser = apiService.getCurrentUser();
-        if (!currentLoggedInUser && !userId) {
-          navigate('/login');
-        } else {
-          navigate('/discover');
-        }
-        setLoading(false);
-        return; // Stop further data fetching on critical error
-      }
-
-      // If user data fetched successfully, proceed with other data
-      // 2. Fetch user's posts
-      try {
+        // 2. Fetch user's posts
         const postsData = await apiService.getUserPosts(idToFetch);
         setUserPosts(postsData);
-      } catch (error) {
-        toast.error('Failed to load user posts.');
-        setUserPosts([]);
-      }
 
-      // 3. Fetch memberships and requests only for the current logged-in user's profile
-      if (currentUser && fetchedUser?._id === currentUser._id) {
-         try {
-            const userMembershipRequestsData = await apiService.getUserMembershipRequests(currentUser._id);
+        // 3. Fetch memberships and requests only for the current logged-in user's profile
+        if (currentUser && fetchedUser?._id === currentUser._id) {
+          try {
+            const [userMembershipRequestsData, userMembershipsData] = await Promise.all([
+              apiService.getUserMembershipRequests(currentUser._id),
+              apiService.getUserMemberships(currentUser._id)
+            ]);
             setMembershipRequests(userMembershipRequestsData);
-         } catch (error) {
-            toast.error('Failed to load pending membership requests.');
-            setMembershipRequests([]);
-         }
-
-         try {
-            const userMembershipsData = await apiService.getUserMemberships(currentUser._id);
             setUserMemberships(userMembershipsData);
-         } catch (error) {
-            console.error('Failed to load user memberships:', error);
-            toast.error('Unable to load your tribes. Please try again later.');
-            setUserMemberships([]);
-         }
-      } else {
-         setMembershipRequests([]);
-         setUserMemberships([]);
-      }
+          } catch (error) {
+            console.error('Error fetching memberships:', error);
+            toast.error('Failed to load membership data');
+          }
+        }
 
-      // 4. Data fetching complete
-      setLoading(false);
+      } catch (error: any) {
+        console.error('Profile data fetch error:', error);
+        if (error.response?.status === 401) {
+          toast.error('Session expired. Please login again.');
+          navigate('/login');
+        } else {
+          toast.error('Failed to load profile data');
+          if (!userId) {
+            navigate('/login');
+          } else {
+            navigate('/discover');
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchProfileData();
@@ -756,6 +741,14 @@ export default function Profile() {
           onClose={() => setShowPendingMembershipsList(false)}
           onTribeClick={handleTribeClick}
         />
+
+        {/* Tribe section - mostra messaggio se non ci sono tribe */}
+        {isCurrentUser && userMemberships && userMemberships.length === 0 && (
+          <div className="text-center text-gray-500 mt-4">
+            Non sei ancora in nessuna tribe.{' '}
+            <Link to="/discover" className="text-purple-600 underline">Scopri le tribe</Link>
+          </div>
+        )}
 
       </div>
     </div>

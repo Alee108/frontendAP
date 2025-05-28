@@ -12,7 +12,7 @@ import axios from 'axios';
 
 export default function CreatePostPage() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const [postData, setPostData] = useState({ description: '', location: '', tribeId: '' });
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -20,55 +20,50 @@ export default function CreatePostPage() {
   const [userTribes, setUserTribes] = useState<Tribe[]>([]);
   const [loadingTribes, setLoadingTribes] = useState(true);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
-  const [showPreview, setShowPreview] = useState(false); // State to control preview display
-
-  // Redirect if user is not logged in
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-    }
-  }, [user, navigate]);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Fetch user's founder tribe on page load
   useEffect(() => {
-    if (user) {
-      const fetchUserTribes = async () => {
-        setLoadingTribes(true);
-        try {
-          const allTribes = await apiService.getUserMemberships(user._id);
-          const founderTribe = allTribes.find(tribe => 
-            tribe.founder && tribe.founder._id === user._id
-          );
-          
-          if (founderTribe) {
-            setUserTribes([founderTribe]);
-            setPostData(prev => ({ ...prev, tribeId: founderTribe._id }));
-          } else {
-            setUserTribes([]);
-            setPostData(prev => ({ ...prev, tribeId: '' }));
-            toast.info('You must be a founder of a tribe to create posts.');
-            // Since user must be founder, redirect if no founder tribe is found
-            navigate('/discover'); // Or another appropriate page
-          }
+    const fetchUserTribes = async () => {
+      if (!user) {
+        console.log('No user found, redirecting to login');
+        navigate('/login', { state: { from: '/create-post' } });
+        return;
+      }
 
-        } catch (error) {
-          console.error('Failed to fetch user tribes:', error);
-          if (axios.isAxiosError(error) && error.response?.status === 401) {
-            toast.error('Your session expired while loading tribes. Please re-login.');
-            logout();
-          } else {
-            toast.error('Failed to load your tribes.');
-          }
-           // Redirect on error if tribes couldn't be loaded, especially if mandatory
-           navigate('/discover'); // Or another appropriate page
-
-        } finally {
-          setLoadingTribes(false);
+      setLoadingTribes(true);
+      try {
+        const allTribes = await apiService.getUserMemberships(user._id);
+        const founderTribe = allTribes.find(tribe => 
+          tribe.founder && tribe.founder._id === user._id
+        );
+        
+        if (founderTribe) {
+          setUserTribes([founderTribe]);
+          setPostData(prev => ({ ...prev, tribeId: founderTribe._id }));
+        } else {
+          setUserTribes([]);
+          setPostData(prev => ({ ...prev, tribeId: '' }));
+          toast.info('You must be a founder of a tribe to create posts.');
+          navigate('/discover');
         }
-      };
-      fetchUserTribes();
-    }
-  }, [user, navigate, logout]);
+
+      } catch (error) {
+        console.error('Failed to fetch user tribes:', error);
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          toast.error('Your session has expired. Please login again.');
+          navigate('/login', { state: { from: '/create-post' } });
+        } else {
+          toast.error('Failed to load your tribes.');
+          navigate('/discover');
+        }
+      } finally {
+        setLoadingTribes(false);
+      }
+    };
+
+    fetchUserTribes();
+  }, [user, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

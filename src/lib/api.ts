@@ -1,18 +1,16 @@
 import axios from 'axios';
 import { toast } from 'sonner';
-import type { Post } from '../types/post';
 
 // Token and user management utilities
 const TOKEN_KEY = 'auth_token';
-const USER_KEY = 'current_user';
+const USER_KEY = 'user';
 
 const tokenManager = {
   setToken: (token: string) => {
     try {
-      // Try sessionStorage first
-      sessionStorage.setItem(TOKEN_KEY, token);
-      // Backup in localStorage
-      localStorage.setItem(TOKEN_KEY, token);
+      // Ensure token is properly formatted
+      const formattedToken = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      localStorage.setItem(TOKEN_KEY, formattedToken);
       return true;
     } catch (error) {
       console.error('Error saving token:', error);
@@ -22,17 +20,8 @@ const tokenManager = {
 
   getToken: () => {
     try {
-      // Try sessionStorage first
-      let token = sessionStorage.getItem(TOKEN_KEY);
-      if (!token) {
-        // Fallback to localStorage
-        token = localStorage.getItem(TOKEN_KEY);
-        if (token) {
-          // If found in localStorage, sync to sessionStorage
-          sessionStorage.setItem(TOKEN_KEY, token);
-        }
-      }
-      return token;
+      const token = localStorage.getItem(TOKEN_KEY);
+      return token || null;
     } catch (error) {
       console.error('Error retrieving token:', error);
       return null;
@@ -41,9 +30,7 @@ const tokenManager = {
 
   removeToken: () => {
     try {
-      sessionStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(TOKEN_KEY);
-      sessionStorage.removeItem(USER_KEY);
       localStorage.removeItem(USER_KEY);
       return true;
     } catch (error) {
@@ -57,7 +44,6 @@ const userManager = {
   setUser: (user: User) => {
     try {
       const userData = JSON.stringify(user);
-      sessionStorage.setItem(USER_KEY, userData);
       localStorage.setItem(USER_KEY, userData);
       return true;
     } catch (error) {
@@ -68,13 +54,7 @@ const userManager = {
 
   getUser: (): User | null => {
     try {
-      let userData = sessionStorage.getItem(USER_KEY);
-      if (!userData) {
-        userData = localStorage.getItem(USER_KEY);
-        if (userData) {
-          sessionStorage.setItem(USER_KEY, userData);
-        }
-      }
+      const userData = localStorage.getItem(USER_KEY);
       return userData ? JSON.parse(userData) : null;
     } catch (error) {
       console.error('Error retrieving user data:', error);
@@ -96,7 +76,8 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use((config) => {
   const token = tokenManager.getToken();
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    // Token is already formatted with 'Bearer' prefix
+    config.headers.Authorization = token;
   }
   return config;
 });
@@ -108,10 +89,17 @@ axiosInstance.interceptors.response.use(
     if (error.response) {
       // Handle 401 Unauthorized errors
       if (error.response.status === 401) {
+        // Clear auth data
         tokenManager.removeToken();
-        window.location.href = '/login';
-        toast.error('Session expired. Please login again.');
-        return Promise.reject(error);
+        userManager.setUser(null);
+        
+        // Only show session expired if we had a token
+        if (tokenManager.getToken()) {
+          toast.error('Session expired. Please login again.');
+        } else {
+          toast.error('Please login to access this resource.');
+        }
+        return Promise.reject(new Error('Session expired'));
       }
       
       const message = error.response.data?.message || 'An error occurred';
@@ -126,18 +114,17 @@ axiosInstance.interceptors.response.use(
 );
 
 export interface User {
-  id: string;
   _id: string;
-  username: string;
+  name: string;
+  surname: string;
   email: string;
-  name?: string;
-  surname?: string;
+  username: string;
   profilePhoto?: string;
   bio?: string;
-  createdAt: string;
-  updatedAt: string;
-  followers?: string[];
-  following?: string[];
+  gender?: string;
+  role?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Tribe {
@@ -164,6 +151,102 @@ export interface Comment {
   author: User;
   postId: string;
 }
+
+export interface Post {
+  _id: string;
+  description: string;
+  base64Image?: string;
+  location?: string;
+  userId?: User;
+  createdAt: string;
+  updatedAt: string;
+  likes?: string[];
+  comments?: Comment[];
+}
+
+export interface Conversation {
+  id: string;
+  participants: string[];
+  messages: Message[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Message {
+  id: string;
+  content: string;
+  sender: string;
+  receiver: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PopulatedUser {
+  _id: string; // Assuming string representation of ObjectId
+  username: string;
+  email: string;
+  profilePhoto?: string;
+}
+
+// Updated to match backend's SimplifiedMessage structure
+export interface SimplifiedMessage {
+  id: string; // Corresponds to backend's SimplifiedMessage id
+  message: string; // Corresponds to backend's SimplifiedMessage message (content)
+  sent_at: string; // Corresponds to backend's SimplifiedMessage sent_at (createdAt)
+  senderId: string;
+  receiverId: string;
+  sender: PopulatedUser; // Populated sender details
+  receiver: PopulatedUser; // Populated receiver details
+}
+
+// Updated to match backend's ChatInfo structure
+export interface ChatInfo {
+  userId: string; // The ID of the *other* user in the chat
+  username: string; // The username of the *other* user
+  email: string; // The email of the *other* user
+  profilePhoto?: string; // The profile photo of the *other* user
+  messages: SimplifiedMessage[]; // Array of SimplifiedMessage
+  lastMessage?: { // lastMessage might be optional in backend response for new chats?
+    text: string;
+    sent_at: string;
+  };
+}
+
+// Keeping ReceivedMessage if the socket structure is different from SimplifiedMessage
+export interface ReceivedMessage {
+  id: string;
+  message?: string;
+  message_text?: string;
+  sent_at: string;
+  senderId: string;
+  receiverId: string;
+  sender: {
+    _id: string;
+    username: string;
+    email: string;
+    profilePhoto?: string;
+  };
+  receiver: {
+    _id: string;
+    username: string;
+    email: string;
+    profilePhoto?: string;
+  };
+}
+
+// The backend returns ChatInfo[], so PopulatedConversation is likely not needed for the main chat list
+// If used elsewhere, it may need adjustment or could be removed if ChatInfo is the primary type.
+// export interface PopulatedConversation {
+//   _id: string;
+//   participants: PopulatedUser[];
+//   messages: PopulatedMessage[]; // Note: Backend sends SimplifiedMessage
+//   createdAt: string;
+//   updatedAt: string;
+//   lastMessage?: {
+//     text: string;
+//     sent_at: string;
+//   };
+// }
 
 export const apiService = {
   // Auth
@@ -211,7 +294,7 @@ export const apiService = {
   },
 
   logout: () => {
-    tokenManager.removeToken();
+    return tokenManager.removeToken();
   },
 
   // Users
@@ -539,6 +622,36 @@ export const apiService = {
     } catch (error) {
       console.error('Error adding comment:', error);
       throw error;
+    }
+  },
+
+  // Chat
+  getUserConversations: async (userId: string) => {
+    try {
+      const response = await axiosInstance.get<ChatInfo[]>(`/chat/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user conversations:', error);
+      throw error;
+    }
+  },
+
+  setToken: (token: string) => {
+    return tokenManager.setToken(token);
+  },
+
+  setUser: (user: User) => {
+    return userManager.setUser(user);
+  },
+
+  getUser(): User | null {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    try {
+      return JSON.parse(userStr);
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+      return null;
     }
   },
 };
