@@ -4,11 +4,13 @@ export interface User {
   surname: string;
   username: string;
   profilePhoto?: string;
+  isPublic?: boolean;
 }
 
 export interface Tribe {
   _id: string;
   name: string;
+  profilePhoto?: string;
 }
 
 export interface Comment {
@@ -29,7 +31,9 @@ export interface Post {
     surname: string;
     username: string;
     profilePhoto: string | null;
+    isPublic?: boolean;
   };
+  tribe?: Tribe;
   likes: string[];
   comments: Array<{
     _id: string;

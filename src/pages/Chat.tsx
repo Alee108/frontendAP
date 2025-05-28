@@ -411,7 +411,7 @@ export default function Chat() {
    console.log('Rendering chat interface:', { user, selectedChat, chats: chats.length, messages: messages.length });
 
   return (
-    <div className="flex h-calc(100vh-64px) antialiased text-gray-800">
+    <div className="flex h-[calc(100vh-64px)] antialiased text-gray-800">
       <div className="flex flex-row h-full w-full overflow-x-hidden">
         <div className="flex flex-col py-8 pl-6 pr-2 w-80 bg-white flex-shrink-0">
           <div className="flex flex-row items-center justify-center h-12 w-full">
@@ -478,7 +478,7 @@ export default function Chat() {
             </div>
           )}
           {!searchTerm && (
-          <div className="mt-8 flex flex-col space-y-2 overflow-y-auto pr-2">
+          <div className="mt-8 flex flex-col space-y-2 overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-indigo-500 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-button]:hidden">
             {chats.length === 0 ? (
               <div className="text-center text-gray-500">No conversations yet. Search for users to start a chat.</div>
             ) : (
