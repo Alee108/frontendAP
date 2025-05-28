@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiService, type User, type Tribe, type Post } from '../lib/api';
+import { apiService, type User, type Tribe, type Post, type Membership } from '../lib/api';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -128,7 +128,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
-  const [membershipRequests, setMembershipRequests] = useState<Tribe[]>([]);
+  const [membershipRequests, setMembershipRequests] = useState<Membership[]>([]);
   const [userMemberships, setUserMemberships] = useState<Tribe[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -573,8 +573,7 @@ export default function Profile() {
                      <Users className="h-4 w-4" />
                      <span className="font-semibold">{membershipRequests.length}</span>
                      <span 
-                       className={`cursor-pointer ${membershipRequests.length > 0 ? 'hover:text-purple-600' : 'cursor-default'}`}
-                       onClick={() => { if (membershipRequests.length > 0) setShowPendingMembershipsList(true); }}
+                       className={` ${membershipRequests.length > 0 ? 'hover:text-purple-600' : 'cursor-default'}`}
                      >
                        Pending Memberships
                      </span>
@@ -631,34 +630,41 @@ export default function Profile() {
               <Users className="h-6 w-6" />
               Pending Membership Requests
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {membershipRequests.map(tribe => (
-                <div key={tribe._id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={tribe.profilePhoto || TRIBE_PLACEHOLDER_IMAGE}
-                      alt={tribe.name}
-                      className="w-12 h-12 rounded-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = TRIBE_PLACEHOLDER_IMAGE;
-                      }}
-                    />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{tribe.name}</h3>
-                      <p className="text-sm text-gray-500">{tribe.description}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/tribes/${tribe._id}`)}
-                    >
-                      View
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+{membershipRequests.map(request => {
+  const tribe = request.tribe;
+  console.log(tribe); // Verifica che contenga i dati che ti aspetti
+
+  return (
+    <div key={request._id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+      <div className="flex items-center gap-4">
+        <img
+          src={tribe.profilePhoto || TRIBE_PLACEHOLDER_IMAGE}
+          alt={tribe.name}
+          className="w-12 h-12 rounded-full object-cover"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = TRIBE_PLACEHOLDER_IMAGE;
+          }}
+        />
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-900">{tribe.name}</h3>
+          <p className="text-sm text-gray-500">{tribe.description}</p>
+        </div>
+        {tribe.visibility !== 'PRIVATE' && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/tribes/${tribe._id}`)}
+          >
+            View
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+})}
+
+
           </div>
         )}
 
@@ -742,8 +748,10 @@ export default function Profile() {
           onTribeClick={handleTribeClick}
         />
 
-        {/* Tribe section - mostra messaggio se non ci sono tribe */}
-        {isCurrentUser && userMemberships && userMemberships.length === 0 && (
+        {/* Tribe section - mostra messaggio se non ci sono tribe */
+        
+        }
+        {isCurrentUser && userMemberships.length === 0 && (
           <div className="text-center text-gray-500 mt-4">
             Non sei ancora in nessuna tribe.{' '}
             <Link to="/discover" className="text-purple-600 underline">Scopri le tribe</Link>

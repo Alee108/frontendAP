@@ -127,6 +127,29 @@ export interface User {
   updatedAt?: string;
 }
 
+export interface Membership {
+  _id: string;
+  createdAt: string;
+  updatedAt: string;
+  joinedAt: string;
+  role: 'FOUNDER' | 'MODERATOR' | 'MEMBER';
+  status: 'ACTIVE' | 'PENDING';
+  tribe: {
+    _id: string;
+    name: string;
+    description: string;
+    visibility: 'PUBLIC' | 'PRIVATE';
+    profilePhoto?: string;
+    founder: string;
+    memberships: Membership[];
+    createdAt: string;
+    updatedAt: string;
+  };
+  user: string;
+  __v: number;
+}
+
+
 export interface Tribe {
   id: string;
   _id: string;
@@ -136,12 +159,7 @@ export interface Tribe {
   status: 'ACTIVE' | 'CLOSED';
   profilePhoto?: string;
   founder: User;
-  memberships: Array<{
-    user: User;
-    role: 'FOUNDER' | 'MODERATOR' | 'MEMBER';
-    status: 'ACTIVE' | 'PENDING';
-    joinedAt: string;
-  }>;
+  memberships: Membership[];
   createdAt: string;
   updatedAt: string;
 }
@@ -409,7 +427,7 @@ export const apiService = {
     const response = await axiosInstance.get<Tribe[]>(`/membership/user/${userId}/requests`);
     return response.data;
   },
-
+  
   getUserMemberships: async (userId: string) => {
     const response = await axiosInstance.get<Tribe[]>(`/membership/user/${userId}`);
     return response.data;
@@ -553,7 +571,7 @@ export const apiService = {
   },
 
   requestMembership: async (tribeId: string) => {
-    const response = await axiosInstance.post(`/tribes/join/${tribeId}`);
+    const response = await axiosInstance.patch(`/tribes/${tribeId}/join`);
     return response.data;
   },
 
@@ -568,7 +586,7 @@ export const apiService = {
   },
 
   // Tribe Actions
-  closeTribe: async (tribeId: string) => {
+  closeTribe: async (tribeId: string): Promise<Tribe> => {
     const response = await axiosInstance.patch<Tribe>(`/tribes/${tribeId}/close`);
     return response.data;
   },
@@ -604,9 +622,8 @@ export const apiService = {
     return response.data;
   },
 
-  exitTribe: async (userId: string, tribeId: string) => {
-    const response = await axiosInstance.patch(`/membership/exit/${userId}/${tribeId}`);
-    return response.data;
+  exitTribe: async (userId: string, tribeId: string): Promise<void> => {
+    await axiosInstance.patch(`/membership/exit/${userId}/${tribeId}`);
   },
 
   // Posts
@@ -687,6 +704,17 @@ export const apiService = {
       return null;
     }
   },
+
+  getPendingRequests: async (tribeId: string): Promise<Array<{ userId: User; status: 'pending' }>> => {
+    const response = await axiosInstance.post<Array<{ userId: User; status: 'pending' }>>(`/tribes/${tribeId}/pending-request`);
+    return response.data;
+  },
+
+  handleTribeRequest: async (tribeId: string, userId: string, action: 'accept' | 'reject'): Promise<void> => {
+    await axiosInstance.post(`/tribes/${tribeId}/user/${userId}`, { action });
+  },
+
+
 };
 
 export default axiosInstance; 

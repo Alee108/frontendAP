@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiService, type Tribe, type User, type Comment as ApiComment } from '../lib/api';
 import { type Post } from '../types/post';
 import { toast } from 'sonner';
-import { Loader2, Heart, MessageCircle, Users, Lock, Globe, User as UserIcon } from 'lucide-react';
+import { Loader2, Heart, MessageCircle, Users, Lock, Globe, User as UserIcon, UserPlus } from 'lucide-react';
 import { CommentSection } from '../components/CommentSection';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '../lib/auth-context';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { PendingRequestsModal } from '../components/PendingRequestsModal';
 
 // Placeholder images
 const TRIBE_PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80';
@@ -27,6 +28,21 @@ export default function TribeProfile() {
   const [showMembersList, setShowMembersList] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [exiting, setExiting] = useState(false);
+  const [showPendingRequests, setShowPendingRequests] = useState(false);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  // Define state-dependent variables here, after tribe state is potentially set
+  const isMember = tribe?.memberships.some(m => m.status === 'ACTIVE');
+  const hasPendingRequest = tribe?.memberships.some(m => m.status === 'PENDING');
+  const isPrivate = tribe?.visibility === 'PRIVATE';
+  const isClosed = tribe?.status === 'CLOSED';
+  const isFounderOfTribe = tribe?.founder._id === user?._id;
+  const isModerator = tribe?.memberships.some(m =>
+    m.user._id === user?._id && m.role === 'MODERATOR' && m.status === 'ACTIVE'
+  );
+  const isAlreadyInTribe = isFounderOfTribe || isMember;
+
+  const canManageRequests = isFounderOfTribe || isModerator;
 
   useEffect(() => {
     const fetchTribeData = async () => {
@@ -68,6 +84,13 @@ export default function TribeProfile() {
       loadComments(expandedPost);
     }
   }, [expandedPost, comments]); // Added comments to dependency array
+
+  useEffect(() => {
+    if (tribe && canManageRequests) {
+      const pendingCount = tribe.memberships.filter(m => m.status === 'PENDING').length;
+      setPendingRequestsCount(pendingCount);
+    }
+  }, [tribe, canManageRequests, tribe?.memberships]); // Added tribe.memberships to dependency array
 
   const loadTribeProfile = async (id: string) => {
     try {
@@ -160,8 +183,8 @@ export default function TribeProfile() {
   };
 
   const handleExitTribe = async () => {
-    if (!user || !tribeId) return;
-    
+    if (!user || !tribeId || !tribe) return; // Add tribe check
+
     setExiting(true);
     try {
       if (isFounderOfTribe) {
@@ -214,15 +237,8 @@ export default function TribeProfile() {
     );
   }
 
-  const isMember = tribe.memberships.some(m => m.status === 'ACTIVE');
-  const hasPendingRequest = tribe.memberships.some(m => m.status === 'PENDING');
-  const isPrivate = tribe.visibility === 'PRIVATE';
-  const isClosed = tribe.status === 'CLOSED';
-  const isFounderOfTribe = tribe.founder._id === user?._id;
-  const isAlreadyInTribe = isFounderOfTribe || isMember;
-
   // Calculate total active members including founder, moderators, and members
-  const totalActiveMembers = tribe.memberships.filter(m => m.status === 'ACTIVE').length;
+  const totalActiveMembers = tribe?.memberships.filter(m => m.status === 'ACTIVE').length || 0; // Added optional chaining and default
 
   // Se la tribe è chiusa, mostriamo una vista speciale
   if (isClosed) {
@@ -368,6 +384,16 @@ export default function TribeProfile() {
                   <Users className="h-5 w-5" />
                   <span>{totalActiveMembers} members</span>
                 </button>
+
+                {canManageRequests && pendingRequestsCount > 0 && (
+                  <button
+                    onClick={() => setShowPendingRequests(true)}
+                    className="flex items-center gap-2 text-purple-600 hover:text-purple-700 transition-colors"
+                  >
+                    <UserPlus className="h-5 w-5" />
+                    <span>{pendingRequestsCount} pending request{pendingRequestsCount !== 1 ? 's' : ''}</span>
+                  </button>
+                )}
               </div>
 
               {/* Founder Info in top right */}
@@ -660,6 +686,19 @@ export default function TribeProfile() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Pending Requests Modal */}
+        {canManageRequests && (
+          <PendingRequestsModal
+            isOpen={showPendingRequests}
+            onClose={() => setShowPendingRequests(false)}
+            tribeId={tribeId || ''}
+            onRequestHandled={() => {
+              loadTribeProfile(tribeId || '');
+              // Do not close the modal automatically, let the user close it manually after seeing the updated list
+            }}
+          />
+        )}
       </div>
     </div>
   );

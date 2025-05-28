@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Post } from '../types/post';
 import { formatDistanceToNow } from 'date-fns';
-import { Heart, MessageCircle, Send, User, UserPlus } from 'lucide-react';
+import { Heart, MessageCircle, Send, User, UserPlus, Trash2 } from 'lucide-react';
 import { apiService } from '../lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth-context';
 import { useNavigate } from 'react-router-dom';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { Button } from './ui/button';
 
 interface PostCardProps {
   post: Post;
@@ -19,6 +21,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
   const [isLiked, setIsLiked] = useState(post.likes?.includes(user?._id || '') || false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleLike = async () => {
     try {
@@ -75,9 +78,26 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
     }
   };
 
+  const handleDeletePost = async () => {
+    if (!user || user._id !== post.userId._id) return;
+    
+    setIsDeleting(true);
+    try {
+      await apiService.deletePost(post._id);
+      toast.success('Post deleted successfully');
+      onPostUpdate();
+    } catch (error) {
+      toast.error('Failed to delete post');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (!post.userId) {
     return null;
   }
+
+  const isPostOwner = user?._id === post.userId._id;
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-4">
@@ -109,31 +129,63 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
           </div>
         </div>
 
-        {post.tribe && (
-          <div 
-            className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg"
-            onClick={handleTribeClick}
-          >
-            {post.tribe.profilePhoto && (
-              <img
-                src={post.tribe.profilePhoto}
-                alt={post.tribe.name}
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            )}
-            <span className="font-medium text-gray-700">{post.tribe.name}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          {post.tribe && (
+            <div 
+              className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg"
+              onClick={handleTribeClick}
+            >
+              {post.tribe.profilePhoto ? (
+                <img
+                  src={post.tribe.profilePhoto}
+                  alt={post.tribe.name}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                  <span className="text-gray-500">
+                    {post.tribe.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <span className="font-medium text-gray-700">{post.tribe.name}</span>
+            </div>
+          )}
 
-        {!isFollowing && user?._id !== post.userId._id && (
-          <button
-            onClick={handleFollow}
-            className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Follow</span>
-          </button>
-        )}
+          {isPostOwner && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-gray-500 hover:text-red-500">
+                  <Trash2 className="w-5 h-5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Post</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this post? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeletePost} disabled={isDeleting}>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+
+          {!isFollowing && user?._id !== post.userId._id && (
+            <button
+              onClick={handleFollow}
+              className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Follow</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <p className="mb-4">{post.description}</p>

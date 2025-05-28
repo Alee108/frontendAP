@@ -23,8 +23,10 @@ export default function DiscoverTribes() {
   const [loading, setLoading] = useState(false);
   const [visibilityFilter, setVisibilityFilter] = useState<'ALL' | 'PUBLIC' | 'PRIVATE'>('ALL');
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
-  const [isFounder, setIsFounder] = useState(false);
-  
+
+  // State for managing join requests
+  const [joiningTribeId, setJoiningTribeId] = useState<string | null>(null);
+
   // Create tribe dialog state
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -51,27 +53,32 @@ export default function DiscoverTribes() {
         data = data.filter(tribe => tribe.visibility === visibilityFilter);
       }
 
-      // Check if user is a founder of any tribe
-      if (user) {
-        const isUserFounder = data.some(tribe => 
-          tribe.founder._id === user._id || 
-          tribe.memberships?.some(m => m.user._id === user._id && m.role === 'FOUNDER')
-        );
-        setIsFounder(isUserFounder);
-      }
+      // Check if user is a founder, member, or has pending request for each tribe
+      const updatedData = data.map(tribe => {
+        const isUserFounder = tribe.founder?._id === user?._id; // Check if current user is the founder
+        const isMemberOfTribe = tribe.memberships?.some(m => m.user === user?._id && m.status === 'ACTIVE' && m.role !== 'FOUNDER'); // Check if current user is a regular member
+        const isModeratorOfTribe = tribe.memberships?.some(m => m.user === user?._id && m.status === 'ACTIVE' && m.role === 'MODERATOR'); // Check if current user is a moderator
+        const hasPendingRequest = tribe.memberships?.some(m => m.user === user?._id && m.status === 'PENDING'); // Check if current user has a pending request
+        const isAlreadyInTribe = isUserFounder || isMemberOfTribe || isModeratorOfTribe; // User is already in the tribe if founder, member, or moderator
 
-      // Ensure all tribes have required fields
-      data = data.map(tribe => ({
-        ...tribe,
-        _id: tribe._id || tribe.id || `temp-${Math.random()}`,
-        name: tribe.name || 'Unnamed Tribe',
-        description: tribe.description || 'No description available',
-        visibility: tribe.visibility || 'PUBLIC',
-        memberships: tribe.memberships || [],
-        profilePhoto: tribe.profilePhoto || TRIBE_PLACEHOLDER_IMAGE
-      }));
+        return {
+          ...tribe,
+          _id: tribe._id || tribe.id || `temp-${Math.random()}`,
+          name: tribe.name || 'Unnamed Tribe',
+          description: tribe.description || 'No description available',
+          visibility: tribe.visibility || 'PUBLIC',
+          memberships: tribe.memberships || [],
+          profilePhoto: tribe.profilePhoto || TRIBE_PLACEHOLDER_IMAGE,
+          isUserFounder,
+          isMemberOfTribe,
+          isModeratorOfTribe,
+          hasPendingRequest,
+          isAlreadyInTribe,
+        };
+      });
 
-      setTribes(data);
+      setTribes(updatedData);
+
     } catch (error) {
       console.error('Error fetching tribes:', error);
       toast.error('Failed to load tribes');
@@ -93,7 +100,7 @@ export default function DiscoverTribes() {
       // Verifica l'estensione del file
       const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
       const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-      
+
       if (!validExtensions.includes(fileExtension)) {
         toast.error('Please select a valid image file (jpg, jpeg, png, gif, or webp)');
         e.target.value = ''; // Reset the input
@@ -150,14 +157,72 @@ export default function DiscoverTribes() {
     }
   };
 
-  const renderTribeCard = (tribe: Tribe) => {
+  const handleJoinRequest = async (tribeId: string, isPrivate: boolean) => {
+    console.log('handleJoinRequest called with tribeId:', tribeId, 'isPrivate:', isPrivate);
+    if (!user) {
+        toast.info('Please login to join tribes.');
+        navigate('/login'); // Assuming you have a login route
+        return;
+    }
+
+    setJoiningTribeId(tribeId);
+    console.log('Joining tribe:', tribeId, 'Private:', isPrivate);
+    if( !isPrivate) {
+      navigate(`/tribes/${tribeId}`); 
+    }else {
+      console.log('Sending join request for tribe:', tribeId);
+    try {
+        await apiService.requestMembership(tribeId);
+        toast.success(isPrivate ? 'Join request sent!' : 'Successfully joined tribe!');
+        // Refresh the tribes list to update the button state for the joined/requested tribe
+        fetchTribes(debouncedSearchTerm);
+    } catch (error) {
+        console.error('Error sending join request:', error);
+        toast.error(isPrivate ? 'Failed to send join request.' : 'Failed to join tribe.');
+    } finally {
+        setJoiningTribeId(null);
+    }
+  }
+};
+
+  const renderTribeCard = (tribe: Tribe & { isUserFounder?: boolean; isMemberOfTribe?: boolean; isModeratorOfTribe?: boolean; hasPendingRequest?: boolean; isAlreadyInTribe?: boolean }) => {
     const activeMembers = tribe.memberships?.filter(m => m.status === 'ACTIVE').length || 0;
     const founderUsername = tribe.founder?.username || 'Unknown';
-    const isPrivate = tribe.visibility === 'PRIVATE';
+    const isPrivate = tribe.visibility == 'PRIVATE';
+    console.log('Rendering tribe:', tribe._id, 'visibility:', tribe.visibility, 'isPrivate:', isPrivate);
     const isClosed = tribe.status === 'CLOSED';
-    const isFounderOfTribe = tribe.founder._id === user?._id;
-    const isMemberOfTribe = tribe.memberships?.some(m => m.user._id === user?._id && m.status === 'ACTIVE');
-    const isAlreadyInTribe = isFounderOfTribe || isMemberOfTribe;
+    const isUserFounder = tribe.isUserFounder;
+    const isMemberOfTribe = tribe.isMemberOfTribe;
+    const isModeratorOfTribe = tribe.isModeratorOfTribe;
+    const hasPendingRequest = tribe.hasPendingRequest;
+    const isAlreadyInTribe = tribe.isAlreadyInTribe;
+
+    const buttonText = isClosed
+      ? 'Closed Tribe'
+      : isUserFounder
+      ? 'Your Tribe'
+      : isMemberOfTribe
+      ? 'Already a Member'
+      : isModeratorOfTribe
+      ? 'Tribe Moderator'
+      : hasPendingRequest
+      ? 'Request Pending'
+      : isPrivate
+      ? 'Request to Join'
+      : 'View Tribe'; // For public tribes
+
+    const isButtonDisabled = isClosed || isAlreadyInTribe;
+
+    //console.log(isButtonDisabled, 'isButtonDisabled for tribe:', tribe._id);
+
+    const handleButtonClick = () => {
+      console.log('Button clicked for tribe:', tribe._id, 'isClosed:', isClosed, 'isAlreadyInTribe:', isAlreadyInTribe);
+      if (isClosed || isAlreadyInTribe) {
+        navigate(`/tribes/${tribe._id}`);
+      } else if ( !isAlreadyInTribe) {
+         handleJoinRequest(tribe._id, isPrivate); // Handle joining public tribe
+      }
+    };
 
     return (
       <div key={tribe._id} className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl border border-white/20 flex flex-col items-center text-center">
@@ -171,7 +236,7 @@ export default function DiscoverTribes() {
           }}
         />
         <h2 className="text-xl font-semibold text-gray-900 mb-2">{tribe.name}</h2>
-        
+
         {isClosed ? (
           <>
             <div className="flex items-center space-x-2 text-gray-700 text-sm mb-4">
@@ -179,61 +244,59 @@ export default function DiscoverTribes() {
               <span>Closed Tribe</span>
             </div>
             <p className="text-gray-500 text-sm mb-4">This tribe is closed. You can view posts but cannot join.</p>
-            <Link to={`/tribes/${tribe._id}`} className="w-full mt-auto">
-              <Button 
-                className="w-full bg-gray-100 text-gray-500 hover:bg-gray-200 rounded-xl"
+             {/* Even if closed, members should be able to view posts */}
+            {isAlreadyInTribe && (
+             <Button
+                onClick={handleButtonClick} // Use handleButtonClick for navigation
+                disabled={isButtonDisabled}
+                className="w-full bg-gray-100 text-gray-500 hover:bg-gray-200 rounded-xl mt-auto"
               >
-                View Posts
+                {buttonText}
               </Button>
-            </Link>
-          </>
-        ) : isPrivate ? (
-          <>
-            <div className="flex items-center space-x-2 text-gray-700 text-sm mb-4">
-              <Lock className="h-4 w-4 text-red-500" />
-              <span>Private Tribe</span>
-            </div>
-            <p className="text-gray-500 text-sm mb-4">This is a private tribe. Request to join to see more details.</p>
-            <Link to={`/tribes/${tribe._id}`} className="w-full mt-auto">
-              <Button 
-                className={`w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl ${
-                  isAlreadyInTribe ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                disabled={isAlreadyInTribe}
-              >
-                {isFounderOfTribe ? 'Your Tribe' : isMemberOfTribe ? 'Already a Member' : 'Request to Join'}
-              </Button>
-            </Link>
+            )}
+             {!isAlreadyInTribe && (
+               <Button
+                 disabled
+                 className="w-full bg-gray-100 text-gray-500 rounded-xl mt-auto"
+               >
+                 Closed Tribe
+               </Button>
+             )}
           </>
         ) : (
           <>
-            <p className="text-gray-700 text-sm mb-4 flex-grow">{tribe.description}</p>
-
-            <div className="flex items-center space-x-2 text-gray-700 text-sm mb-2">
-              <Globe className="h-4 w-4 text-green-500" />
-              <span>Public Tribe</span>
+            <div className="flex items-center space-x-2 text-gray-700 text-sm mb-4">
+              {isPrivate ? (
+                <Lock className="h-4 w-4 text-red-500" />
+              ) : (
+                <Globe className="h-4 w-4 text-green-500" />
+              )}
+              <span>{isPrivate ? 'Private' : 'Public'} Tribe</span>
             </div>
+            <p className="text-gray-700 text-sm mb-4 flex-grow">{tribe.description}</p>
 
             <div className="flex items-center space-x-2 text-gray-700 text-sm mb-2">
               <Users className="h-4 w-4" />
               <span>Founder: {founderUsername}</span>
             </div>
 
-            <div className="flex items-center space-x-2 text-gray-700 text-sm mb-4">
-              <Users className="h-4 w-4" />
-              <span>Members: {activeMembers}</span>
-            </div>
+            {!isPrivate && (
+              <div className="flex items-center space-x-2 text-gray-700 text-sm mb-4">
+                <Users className="h-4 w-4" />
+                <span>Members: {activeMembers}</span>
+              </div>
+            )}
 
-            <Link to={`/tribes/${tribe._id}`} className="w-full mt-auto">
-              <Button 
-                className={`w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl ${
-                  isAlreadyInTribe ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                disabled={isAlreadyInTribe}
-              >
-                {isFounderOfTribe ? 'Your Tribe' : isMemberOfTribe ? 'Already a Member' : 'View Tribe'}
-              </Button>
-            </Link>
+            <Button
+              onClick={handleButtonClick}
+              disabled={isButtonDisabled}
+              className={`w-full mt-auto rounded-xl ${isButtonDisabled ? 'opacity-50 ' : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white'}`}
+            >
+              {joiningTribeId === tribe._id ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              {buttonText}
+            </Button>
           </>
         )}
       </div>
@@ -247,176 +310,106 @@ export default function DiscoverTribes() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
             Discover Tribes
           </h1>
-          
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button 
-                        className={`bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl ${
-                          isFounder ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                        disabled={isFounder}
-                      >
-                        {isFounder ? (
-                          <>
-                            <Crown className="w-4 h-4 mr-2" />
-                            Already a Founder
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Create Tribe
-                          </>
-                        )}
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                      <DialogHeader>
-                        <DialogTitle>Create a New Tribe</DialogTitle>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="flex flex-col items-center gap-4">
-                          <div className="relative w-32 h-32">
-                            {previewUrl ? (
-                              <img
-                                src={previewUrl}
-                                alt="Tribe preview"
-                                className="w-full h-full rounded-full object-cover ring-2 ring-purple-200"
-                              />
-                            ) : (
-                              <div className="w-full h-full rounded-full bg-gray-100 flex items-center justify-center">
-                                <ImageIcon className="w-8 h-8 text-gray-400" />
-                              </div>
-                            )}
-                            <label
-                              htmlFor="tribe-photo"
-                              className="absolute bottom-0 right-0 bg-purple-500 text-white p-2 rounded-full cursor-pointer hover:bg-purple-600 transition-colors"
-                            >
-                              <Plus className="w-4 h-4" />
-                              <input
-                                id="tribe-photo"
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={handlePhotoChange}
-                              />
-                            </label>
-                          </div>
-                          <p className="text-sm text-gray-500">Upload a photo for your tribe (optional)</p>
-                        </div>
 
-                        <div className="grid gap-2">
-                          <label htmlFor="name" className="text-sm font-medium">
-                            Tribe Name
-                          </label>
-                          <Input
-                            id="name"
-                            value={newTribeData.name}
-                            onChange={(e) => setNewTribeData(prev => ({ ...prev, name: e.target.value }))}
-                            placeholder="Enter tribe name"
-                            className="rounded-xl"
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <label htmlFor="description" className="text-sm font-medium">
-                            Description
-                          </label>
-                          <Textarea
-                            id="description"
-                            value={newTribeData.description}
-                            onChange={(e) => setNewTribeData(prev => ({ ...prev, description: e.target.value }))}
-                            placeholder="Describe your tribe's purpose and values"
-                            className="rounded-xl min-h-[100px]"
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <label htmlFor="visibility" className="text-sm font-medium">
-                            Visibility
-                          </label>
-                          <Select
-                            value={newTribeData.visibility}
-                            onValueChange={(value: 'PUBLIC' | 'PRIVATE') => 
-                              setNewTribeData(prev => ({ ...prev, visibility: value }))
-                            }
-                          >
-                            <SelectTrigger className="rounded-xl">
-                              <SelectValue placeholder="Select visibility" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="PUBLIC">Public - Anyone can find and request to join</SelectItem>
-                              <SelectItem value="PRIVATE">Private - Only invited members can join</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="flex justify-end gap-3">
-                        <Button
-                          variant="outline"
-                          onClick={() => setIsCreateDialogOpen(false)}
-                          className="rounded-xl"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          onClick={handleCreateTribe}
-                          disabled={isCreating || !newTribeData.name.trim()}
-                          className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl"
-                        >
-                          {isCreating ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              Creating...
-                            </>
-                          ) : (
-                            'Create Tribe'
-                          )}
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+          {/* Create Tribe Dialog Trigger */}
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white">
+                <Plus className="mr-2 h-5 w-5" /> Create New Tribe
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create New Tribe</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <Input
+                  placeholder="Tribe Name"
+                  value={newTribeData.name}
+                  onChange={(e) => setNewTribeData({ ...newTribeData, name: e.target.value })}
+                />
+                <Textarea
+                  placeholder="Tribe Description"
+                  value={newTribeData.description}
+                  onChange={(e) => setNewTribeData({ ...newTribeData, description: e.target.value })}
+                />
+                <Select
+                  value={newTribeData.visibility}
+                  onValueChange={(value: 'PUBLIC' | 'PRIVATE') => setNewTribeData({ ...newTribeData, visibility: value })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select visibility" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PUBLIC">Public</SelectItem>
+                    <SelectItem value="PRIVATE">Private</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Profile Photo</label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      id="profilePhoto" // Add an id for the label
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoChange}
+                      className="block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-purple-50 file:text-purple-700
+                        hover:file:bg-purple-100
+                      "
+                    />
+                    {previewUrl && (
+                      <img src={previewUrl} alt="Profile Preview" className="w-16 h-16 rounded-full object-cover" />
+                    )}
+                     {!previewUrl && newTribeData.profilePhoto === null && (
+                       <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center">
+                          <ImageIcon className="w-8 h-8 text-gray-500" />
+                       </div>
+                     )}
+                  </div>
                 </div>
-              </TooltipTrigger>
-              {isFounder && (
-                <TooltipContent>
-                  <p>You can only be the founder of one tribe at a time</p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleCreateTribe} disabled={isCreating} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white">
+                  {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Create Tribe
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4 mb-8">
+        <div className="flex items-center space-x-4 mb-8">
           <div className="relative flex-grow">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <Input
-              type="text"
-              placeholder="Search tribes by name..."
+              placeholder="Search tribes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 w-full rounded-xl bg-white/80 backdrop-blur-xl border border-white/20 shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
+              className="pl-10 pr-4 py-2 rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500"
             />
           </div>
-          <Select value={visibilityFilter} onValueChange={(value: 'ALL' | 'PUBLIC' | 'PRIVATE') => setVisibilityFilter(value)}>
-            <SelectTrigger className="w-[180px] rounded-xl bg-white/80 backdrop-blur-xl border border-white/20 shadow-lg">
+          <Select onValueChange={(value: 'ALL' | 'PUBLIC' | 'PRIVATE') => setVisibilityFilter(value)} value={visibilityFilter}>
+            <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by visibility" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All Tribes</SelectItem>
-              <SelectItem value="PUBLIC">Public Only</SelectItem>
-              <SelectItem value="PRIVATE">Private Only</SelectItem>
+              <SelectItem value="PUBLIC">Public Tribes</SelectItem>
+              <SelectItem value="PRIVATE">Private Tribes</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         {loading ? (
-          <div className="flex justify-center">
+          <div className="flex justify-center items-center min-h-[300px]">
             <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
           </div>
         ) : tribes.length === 0 ? (
-          <p className="text-center text-gray-600">No tribes found matching your criteria.</p>
+          <p className="text-center text-gray-600 text-lg">No tribes found.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {tribes.map(renderTribeCard)}
