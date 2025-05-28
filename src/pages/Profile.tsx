@@ -269,6 +269,17 @@ export default function Profile() {
     }
   }, [showFollowingList, user, following.length, loadingLists.following]);
 
+
+  const deletePendingMembershipbyUser = async (tribeId: string, userId: string) => {
+    try {
+      await apiService.deletePendingMembershipbyUser(tribeId, userId);
+      setMembershipRequests(prev => prev.filter(request => request.tribe._id !== tribeId));
+      toast.success('Membership request cancelled successfully');
+    } catch (error) {
+      console.error('Error cancelling membership request:', error);
+      toast.error('Failed to cancel membership request');
+    }
+  }
   // Handle follow/unfollow toggle
   const handleFollowToggle = async (targetUserId: string, isCurrentlyFollowing: boolean) => {
     const currentUser = apiService.getCurrentUser();
@@ -650,13 +661,13 @@ export default function Profile() {
           <h3 className="font-semibold text-gray-900">{tribe.name}</h3>
           <p className="text-sm text-gray-500">{tribe.description}</p>
         </div>
-        {tribe.visibility !== 'PRIVATE' && (
+        {tribe.visibility == 'PRIVATE' && (
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate(`/tribes/${tribe._id}`)}
+            onClick={() => {deletePendingMembershipbyUser(tribe._id, user._id)}}
           >
-            View
+            Cancel Request 
           </Button>
         )}
       </div>

@@ -575,6 +575,11 @@ export const apiService = {
     return response.data;
   },
 
+  deletePendingMembershipbyUser: async (tribeId: string,userId:string) => {
+    const response = await axiosInstance.post(`/membership/reject-pending/${tribeId}/${userId}`);
+    return response.data;
+  },
+
   getTribePosts: async (tribeId: string) => {
     const response = await axiosInstance.get<Post[]>(`/tribes/${tribeId}/posts`);
     return response.data;
