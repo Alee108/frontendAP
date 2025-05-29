@@ -268,10 +268,6 @@ export default function DiscoverTribes() {
          }else  {
          handleJoinRequest(tribe._id, isPrivate); // Handle joining public tribe
       }
-      }else if (isClosed || isAlreadyInTribe || userHasTribe) {
-        //some 
-        toast.error('You are already a member of a tribe or it is closed.');
-
       } else
       if(buttonText === 'Your Tribe' || 'Tribe Moderator' || 'Already a Member') {
         navigate(`/tribes/${tribe._id}`); // Navigate to the tribe page if it's the user's own tribe
@@ -460,6 +456,7 @@ export default function DiscoverTribes() {
               <SelectItem value="ALL">All Tribes</SelectItem>
               <SelectItem value="PUBLIC">Public Tribes</SelectItem>
               <SelectItem value="PRIVATE">Private Tribes</SelectItem>
+              <SelectItem value="CLOSED">Closed Tribes</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -34,6 +34,10 @@ const getNotificationIcon = (type: Notification['type']) => {
       return '✉️';
     case 'SYSTEM':
       return '🔔';
+    case 'FOLLOW':
+      return '👤';
+    case 'UNFOLLOW':
+      return '🚫';
     default:
       return '📌';
   }

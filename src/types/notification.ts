@@ -9,7 +9,9 @@ export type NotificationType =
   | 'TRIBE_UPDATE'
   | 'TRIBE_PROMOTION'
   | 'NEW_MESSAGE'
-  | 'SYSTEM';
+  | 'SYSTEM'
+  | 'FOLLOW'
+  | 'UNFOLLOW';
 
 export interface Notification {
   _id: string;

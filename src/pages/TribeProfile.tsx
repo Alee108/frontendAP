@@ -125,10 +125,10 @@ export default function TribeProfile() {
         setPosts(postsWithLikedStatus);
 
         // Se la tribe è chiusa e l'utente non è il founder, reindirizza al discover
-        if (tribeData.visibility === 'CLOSED' && tribeData.founder._id !== user?._id) {
+        /*if (tribeData.visibility === 'CLOSED' && tribeData.founder._id !== user?._id) {
           toast.info('This tribe is closed.');
           navigate('/discover');
-        }
+        }*/
 
         console.log('Tribe data loaded:', { tribeId, isFounderOfTribe: tribeData.founder._id === user?._id, isClosed: tribeData.visibility === 'CLOSED', tribeVisibility: tribeData.visibility });
       } catch (error) {
