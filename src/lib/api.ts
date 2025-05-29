@@ -248,7 +248,9 @@ export interface SimplifiedMessage {
 
 // Updated to match backend's ChatInfo structure
 export interface ChatInfo {
-  userId: string; // The ID of the *other* user in the chat
+  id: string; // Corresponds to backend's ChatInfo id
+  chatId?: string; // backend might send chatId sometimes? Add for safety
+  participants: PopulatedUser[]; // Array of PopulatedUser
   username: string; // The username of the *other* user
   email: string; // The email of the *other* user
   profilePhoto?: string; // The profile photo of the *other* user
@@ -262,8 +264,8 @@ export interface ChatInfo {
 // Keeping ReceivedMessage if the socket structure is different from SimplifiedMessage
 export interface ReceivedMessage {
   id: string;
-  message?: string;
-  message_text?: string;
+  message?: string; // Content for text messages
+  message_text?: string; // Sometimes message content comes in this field?
   sent_at: string;
   senderId: string;
   receiverId: string;
@@ -281,12 +283,48 @@ export interface ReceivedMessage {
   };
 }
 
+export type NotificationType =
+  | 'POST_LIKE'
+  | 'POST_COMMENT'
+  | 'TRIBE_MEMBERSHIP_REQUEST'
+  | 'TRIBE_MEMBERSHIP_ACCEPTED'
+  | 'TRIBE_MEMBERSHIP_REJECTED'
+  | 'TRIBE_MEMBER_REMOVED'
+  | 'TRIBE_MEMBER_PROMOTED'
+  | 'TRIBE_UPDATE'
+  | 'TRIBE_PROMOTION'
+  | 'NEW_MESSAGE'
+  | 'SYSTEM';
+
+export interface Notification {
+  _id: string;
+  type: NotificationType;
+  content: string;
+  createdAt: string;
+  read: boolean;
+  data?: Record<string, any>;
+}
+
+export interface NotificationState {
+  notifications: Notification[];
+  unreadCount: number;
+  isLoading: boolean;
+  error: string | null;
+}
+
+export interface NotificationContextType extends NotificationState {
+  fetchNotifications: () => Promise<void>;
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  clearAllNotifications: () => Promise<void>;
+}
 // The backend returns ChatInfo[], so PopulatedConversation is likely not needed for the main chat list
 // If used elsewhere, it may need adjustment or could be removed if ChatInfo is the primary type.
 // export interface PopulatedConversation {
 //   _id: string;
 //   participants: PopulatedUser[];
-//   messages: PopulatedMessage[]; // Note: Backend sends SimplifiedMessage
+//   messages: SimplifiedMessage[]; // Note: Backend sends SimplifiedMessage
 //   createdAt: string;
 //   updatedAt: string;
 //   lastMessage?: {
@@ -294,6 +332,45 @@ export interface ReceivedMessage {
 //     sent_at: string;
 //   };
 // }
+
+// Define the expected response DTO structure
+interface NotificationResponse<T> {
+  message: string;
+  code: number;
+  data: T;
+}
+
+// Notification API calls
+const notificationService = {
+  async getNotifications(): Promise<Notification[]> {
+    const response = await axiosInstance.get<NotificationResponse<Notification[]>>('/notifications');
+    return response.data.data;
+  },
+
+  async markNotificationAsRead(id: string): Promise<void> {
+    // Assuming the backend returns the updated notification object in the data field
+    const response = await axiosInstance.post<NotificationResponse<Notification>>(`/notifications/${id}/read`);
+    // We don't need to return the data here as the context handles state updates
+  },
+
+  async markAllNotificationsAsRead(): Promise<void> {
+    // Assuming the backend might return an updated list or a confirmation object/null
+    const response = await axiosInstance.post<NotificationResponse<Notification[] | null>>('/notifications/read-all');
+    // We don't need to return the data here
+  },
+
+  async deleteNotification(id: string): Promise<void> {
+    // Assuming the backend returns null or a success indicator in the data field
+    const response = await axiosInstance.post<NotificationResponse<null>>(`/notifications/${id}/delete`);
+    // We don't need to return the data here
+  },
+
+  async clearAllNotifications(): Promise<void> {
+    // Assuming the backend returns null or a success indicator in the data field
+    const response = await axiosInstance.delete<NotificationResponse<null>>('/notifications/clear-all');
+    // We don't need to return the data here
+  },
+};
 
 export const apiService = {
   // Auth
@@ -702,14 +779,7 @@ export const apiService = {
   },
 
   getUser(): User | null {
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return null;
-    try {
-      return JSON.parse(userStr);
-    } catch (error) {
-      console.error('Error parsing user data:', error);
-      return null;
-    }
+    return userManager.getUser();
   },
 
   getPendingRequests: async (tribeId: string): Promise<Array<{ userId: User; status: 'pending' }>> => {
@@ -737,19 +807,20 @@ export const apiService = {
   },
 
   async kickMember(tribeId: string, userId: string): Promise<void> {
-    await axiosInstance.patch(`/tribes/${tribeId}/members/${userId}/kick`);
+    await axiosInstance.delete(`/tribes/${tribeId}/members/${userId}`);
   },
 
   async promoteMember(tribeId: string, userId: string): Promise<Membership[]> {
-    const response = await axiosInstance.patch(`/tribes/${tribeId}/members/${userId}/promote`);
+    const response = await axiosInstance.post<Membership[]>(`/tribes/${tribeId}/members/${userId}/promote`);
     return response.data;
   },
 
   async demoteMember(tribeId: string, userId: string): Promise<Membership[]> {
-    const response = await axiosInstance.patch(`/tribes/${tribeId}/members/${userId}/demote`);
+    const response = await axiosInstance.post<Membership[]>(`/tribes/${tribeId}/members/${userId}/demote`);
     return response.data;
   },
 
+  ...notificationService, // Add notification service functions
 };
 
-export default axiosInstance; 
+export default axiosInstance;

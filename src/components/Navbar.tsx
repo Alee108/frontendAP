@@ -1,12 +1,17 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, Users, User, LogOut, Search, MessageCircle } from 'lucide-react';
+import { Home, Users, User, LogOut, Search, MessageCircle, PlusCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
-import { PlusCircle } from 'lucide-react';
+import { useState } from 'react';
+import { NotificationIcon } from './notifications/NotificationIcon';
+import { NotificationDropdown } from './notifications/NotificationDropdown';
+import { useNotificationNavigation } from '../hooks/useNotificationNavigation';
 
 export default function Navbar() {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const handleNotificationClick = useNotificationNavigation();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -158,7 +163,15 @@ export default function Navbar() {
 
         {/* Desktop Top Bar (minimal) - No border-b */}
         <header className="fixed top-0 left-0 md:left-64 right-0 h-16 backdrop-blur-xl flex items-center justify-end px-4 z-40">
-           {/* Logo and Tribe text were here - moved to sidebar */}
+          {/* Notification Icon and Dropdown */}
+          <div className="relative mr-4">
+            <NotificationIcon onClick={() => setIsNotificationOpen(!isNotificationOpen)} />
+            <NotificationDropdown
+              isOpen={isNotificationOpen}
+              onClose={() => setIsNotificationOpen(false)}
+              onNavigate={handleNotificationClick}
+            />
+          </div>
 
           {/* Logout in Top Bar */}
           <Button
