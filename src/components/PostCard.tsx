@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Post } from '../types/post';
 import { formatDistanceToNow } from 'date-fns';
-import { Heart, MessageCircle, Send, User, UserPlus, Trash2 } from 'lucide-react';
-import { apiService } from '../lib/api';
+import { Heart, MessageCircle, User, UserPlus, Trash2 } from 'lucide-react';
+import { apiService, Comment as ApiCommentType } from '../lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth-context';
 import { useNavigate } from 'react-router-dom';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Button } from './ui/button';
+import { CommentSection } from './CommentSection';
 
 interface PostCardProps {
   post: Post;
@@ -15,13 +16,39 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onPostUpdate }: PostCardProps) {
-  const [comment, setComment] = useState('');
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isLiked, setIsLiked] = useState(post.likes?.includes(user?._id || '') || false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Initialize comments state by mapping the incoming post.comments array.
+  // We explicitly map fields from the actual data structure to the ApiCommentType structure.
+  const [comments, setComments] = useState<ApiCommentType[]>(
+    post.comments.map(comment => {
+      // Cast the comment object to `any` to safely access properties as they come from the backend.
+      // We know from observation/errors that the incoming comment object has 'content' and a userId structure.
+      const incomingComment = comment as any;
+      
+      // Construct an object that strictly adheres to the ApiCommentType structure
+      const mappedComment: ApiCommentType = {
+        _id: incomingComment._id,
+        text: incomingComment.text, // Map the incoming 'content' field to 'text' for ApiCommentType
+        userId: { // Map and ensure userId matches the structure expected by ApiCommentType
+          _id: incomingComment.userId?._id || '', // Use _id from incoming userId, default to empty string if undefined
+          username: incomingComment.userId?.username || '', // Use username, default to empty string
+          profilePhoto: incomingComment.userId?.profilePhoto || null, // Use profilePhoto, default to null
+          name: incomingComment.userId?.name || '', // Include name if available, default to empty string
+          surname: incomingComment.userId?.surname || '', // Include surname if available, default to empty string
+        },
+        postId: incomingComment.postId || post._id, // Use postId from comment if available, otherwise from post
+        createdAt: incomingComment.createdAt || new Date().toISOString(), // Use existing createdAt if available
+        updatedAt: incomingComment.updatedAt || new Date().toISOString(), // Use existing updatedAt if available
+        __v: incomingComment.__v || 0 // Include __v if it exists
+      };
+      return mappedComment;
+    })
+  );
 
   const handleLike = async () => {
     try {
@@ -34,29 +61,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
       onPostUpdate();
     } catch (error) {
       toast.error('Failed to update like status');
-    }
-  };
-
-  const handleComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Comment value:', comment);
-    console.log('IsSubmitting value:', isSubmitting);
-    if (!comment.trim() || isSubmitting) {
-      console.log('Comment is empty or already submitting. Returning.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    console.log('Setting isSubmitting to true and attempting API call.');
-    try {
-      await apiService.addComment(post._id, comment);
-      setComment('');
-      onPostUpdate();
-      toast.success('Comment added successfully');
-    } catch (error) {
-      toast.error('Failed to add comment');
     } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -81,6 +86,8 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
   const handleTribeClick = () => {
     if (post.tribe) {
       navigate(`/tribe/${post.tribe._id}`);
+    } else {
+      console.warn('Tribe information is missing for this post.');
     }
   };
 
@@ -99,7 +106,17 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
     }
   };
 
+  const handleCommentAdded = (comment: ApiCommentType) => {
+    // Aggiorna lo stato dei commenti aggiungendo il nuovo commento in cima
+    // Assuming the received 'comment' already matches the frontend Comment type (ApiCommentType)
+    setComments(prev => [comment, ...prev]);
+    
+    // Aggiorna il post per aggiornare il contatore (richiedendo i post aggiornati dall'API)
+    onPostUpdate();
+  };
+
   if (!post.userId) {
+    console.error('Post is missing userId data:', post);
     return null;
   }
 
@@ -109,6 +126,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
     <div className="bg-white rounded-lg shadow-md p-4 mb-4">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center">
+          {/* User Profile Picture and Name */}
           {post.userId.profilePhoto ? (
             <img
               src={post.userId.profilePhoto}
@@ -135,6 +153,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
           </div>
         </div>
 
+        {/* Tribe Info and Post Actions */}
         <div className="flex items-center gap-4">
           {post.tribe && (
             <div 
@@ -194,14 +213,18 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
         </div>
       </div>
 
+      {/* Post Content */}
       <p className="mb-4">{post.description}</p>
       
-      <img
-        src={post.base64Image}
-        alt="Post content"
-        className="w-full rounded-lg mb-4 object-contain"
-      />
+      {post.base64Image && (
+        <img
+          src={post.base64Image}
+          alt="Post content"
+          className="w-full rounded-lg mb-4 object-contain"
+        />
+      )}
 
+      {/* Like and Comment Counts */}
       <div className="flex items-center gap-4 mb-4">
         <button
           onClick={handleLike}
@@ -212,62 +235,19 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
         </button>
         <div className="flex items-center gap-1 text-gray-500 hover:text-blue-500 transition-colors">
           <MessageCircle />
-          <span>{post.comments.length}</span>
+          <span>{comments.length}</span>
         </div>
         <span className="text-sm text-gray-500">
           {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
         </span>
       </div>
 
-      <form onSubmit={handleComment} className="flex gap-2">
-        <input
-          type="text"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Add a comment..."
-          className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
-        >
-          <Send className="w-5 h-5" />
-        </button>
-      </form>
-
-      {post.comments.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {post.comments.map((comment) => (
-            <div key={comment._id} className="bg-gray-50 p-3 rounded-lg">
-              <div className="flex items-center gap-2 mb-1">
-                {comment.userId.profilePhoto ? (
-                  <img
-                    src={comment.userId.profilePhoto}
-                    alt={comment.userId.username || 'User'}
-                    className="w-6 h-6 rounded-full object-cover cursor-pointer"
-                    onClick={() => navigate(`/profile/${comment.userId._id}`)}
-                  />
-                ) : (
-                  <div 
-                    className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center cursor-pointer"
-                    onClick={() => navigate(`/profile/${comment.userId._id}`)}
-                  >
-                    <User className="w-4 h-4 text-gray-500" />
-                  </div>
-                )}
-                <span 
-                  className="font-medium cursor-pointer hover:text-blue-500"
-                  onClick={() => navigate(`/profile/${comment.userId._id}`)}
-                >
-                  {comment.userId?.username || 'user'}
-                </span>
-              </div>
-              <p className="text-sm">{comment.content}</p>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Comment Section */}
+      <CommentSection 
+        postId={post._id} 
+        comments={comments} // Pass the mapped comments state
+        onCommentAdded={handleCommentAdded} 
+      />
     </div>
   );
 } 
