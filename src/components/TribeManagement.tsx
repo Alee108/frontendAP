@@ -51,7 +51,7 @@ export function TribeManagement({ tribeId, isFounder, isModerator, onTribeUpdate
     
     setIsLoading(true);
     try {
-      const requests = await apiService.getPendingRequests(tribeId);
+      const requests = await apiService.getTribePendingRequests(tribeId);
       // Handle displaying pending requests in a modal or separate view
       onTribeUpdate();
     } catch (error) {

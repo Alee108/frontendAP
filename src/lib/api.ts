@@ -129,33 +129,26 @@ export interface User {
 
 export interface Membership {
   _id: string;
+  tribeId: string;
+  userId: string;
+  role: 'founder' | 'moderator' | 'member';
+  status: 'ACTIVE' | 'PENDING';
   createdAt: string;
   updatedAt: string;
-  joinedAt: string;
-  role: 'FOUNDER' | 'MODERATOR' | 'MEMBER';
-  status: 'ACTIVE' | 'PENDING';
-  tribe: {
-    _id: string;
-    name: string;
-    description: string;
-    visibility: 'PUBLIC' | 'PRIVATE';
-    profilePhoto?: string;
-    founder: string;
-    memberships: Membership[];
-    createdAt: string;
-    updatedAt: string;
-  };
-  user: string;
-  __v: number;
+  // Include user field if populated
+  user?: User;
 }
 
+export interface PopulatedMembership extends Omit<Membership, 'user'> {
+  user: User;
+}
 
 export interface Tribe {
   id: string;
   _id: string;
   name: string;
   description: string;
-  visibility: 'PUBLIC' | 'PRIVATE';
+  visibility: 'PUBLIC' | 'PRIVATE' | 'CLOSED';
   status: 'ACTIVE' | 'CLOSED';
   profilePhoto?: string;
   founder: User;
@@ -550,7 +543,7 @@ export const apiService = {
     return response.data;
   },
 
-  handleMembershipRequest: async (tribeId: string, userId: string, action: 'approve' | 'reject') => {
+  handleMembershipRequest: async (tribeId: string, userId: string, action: string) => {
     const response = await axiosInstance.patch<any>(`/tribes/${tribeId}/membership/${userId}`, { action });
     return response.data;
   },
@@ -561,7 +554,7 @@ export const apiService = {
   },
 
   getTribeMembers: async (tribeId: string) => {
-    const response = await axiosInstance.get<User[]>(`/tribes/${tribeId}/members`);
+    const response = await axiosInstance.get<any[]>(`/tribes/${tribeId}/members`);
     return response.data;
   },
 
@@ -592,7 +585,7 @@ export const apiService = {
 
   // Tribe Actions
   closeTribe: async (tribeId: string): Promise<Tribe> => {
-    const response = await axiosInstance.patch<Tribe>(`/tribes/${tribeId}/close`);
+    const response = await axiosInstance.post<Tribe>(`/tribes/${tribeId}/close`);
     return response.data;
   },
 
@@ -719,6 +712,34 @@ export const apiService = {
     await axiosInstance.post(`/tribes/${tribeId}/user/${userId}`, { action });
   },
 
+  // Tribe Management
+  updateTribeProfile: async (tribeId: string, updates: Partial<Tribe>): Promise<Tribe> => {
+    const response = await axiosInstance.patch(`/tribes/${tribeId}`, updates);
+    return response.data;
+  },
+
+  uploadTribeImage: async (tribeId: string, formData: FormData): Promise<{ url: string }> => {
+    const response = await axiosInstance.post(`/tribes/${tribeId}/image`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  async kickMember(tribeId: string, userId: string): Promise<void> {
+    await axiosInstance.patch(`/tribes/${tribeId}/members/${userId}/kick`);
+  },
+
+  async promoteMember(tribeId: string, userId: string): Promise<Membership[]> {
+    const response = await axiosInstance.patch(`/tribes/${tribeId}/members/${userId}/promote`);
+    return response.data;
+  },
+
+  async demoteMember(tribeId: string, userId: string): Promise<Membership[]> {
+    const response = await axiosInstance.patch(`/tribes/${tribeId}/members/${userId}/demote`);
+    return response.data;
+  },
 
 };
 

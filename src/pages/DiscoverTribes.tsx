@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '../lib/auth-context';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useUserInTribe } from '@/hooks/useUserInTribe';
 
 // Placeholder image for tribes
 const TRIBE_PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80';
@@ -23,7 +24,19 @@ export default function DiscoverTribes() {
   const [loading, setLoading] = useState(false);
   const [visibilityFilter, setVisibilityFilter] = useState<'ALL' | 'PUBLIC' | 'PRIVATE'>('ALL');
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  const { isInTribe: userHasTribe, isLoading: checkingMembership } = useUserInTribe();
 
+  async function isUserInTribe(): Promise<boolean> {
+    try {
+      const memberships = await apiService.getUserMemberships(user?._id || '');
+      console.log(memberships.length)
+      return memberships.length > 0;
+    } catch (error) {
+      console.error('Error checking user memberships:', error);
+      toast.error('Failed to check your tribe memberships. Please try again.');
+      return false;
+    }
+  }
   // State for managing join requests
   const [joiningTribeId, setJoiningTribeId] = useState<string | null>(null);
 
@@ -39,6 +52,8 @@ export default function DiscoverTribes() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const fetchTribes = useCallback(async (query = '') => {
+    const result = await apiService.getUserMemberships(user?._id || '');
+
     setLoading(true);
     try {
       let data: Tribe[];
@@ -161,36 +176,64 @@ export default function DiscoverTribes() {
     console.log('handleJoinRequest called with tribeId:', tribeId, 'isPrivate:', isPrivate);
     if (!user) {
         toast.info('Please login to join tribes.');
-        navigate('/login'); // Assuming you have a login route
+        navigate('/login');
         return;
     }
 
-    setJoiningTribeId(tribeId);
-    console.log('Joining tribe:', tribeId, 'Private:', isPrivate);
-    if( !isPrivate) {
-      navigate(`/tribes/${tribeId}`); 
-    }else {
-      console.log('Sending join request for tribe:', tribeId);
     try {
-        await apiService.requestMembership(tribeId);
-        toast.success(isPrivate ? 'Join request sent!' : 'Successfully joined tribe!');
-        // Refresh the tribes list to update the button state for the joined/requested tribe
-        fetchTribes(debouncedSearchTerm);
-    } catch (error) {
-        console.error('Error sending join request:', error);
-        toast.error(isPrivate ? 'Failed to send join request.' : 'Failed to join tribe.');
-    } finally {
-        setJoiningTribeId(null);
-    }
-  }
-};
+      // Check if user has any active memberships using the API
+      const userMemberships = await apiService.getUserMemberships(user._id);
+      console.log('User memberships:', userMemberships);
+      
+      const hasActiveMembership = userMemberships.some(tribe => {
+        const hasActive = tribe.memberships?.some(membership => 
+          membership.status === 'ACTIVE' || 
+          membership.role === 'FOUNDER' || 
+          membership.role === 'MODERATOR'
+        );
+        console.log('Tribe:', tribe._id, 'Has active membership:', hasActive);
+        return hasActive;
+      });
 
-  const renderTribeCard = (tribe: Tribe & { isUserFounder?: boolean; isMemberOfTribe?: boolean; isModeratorOfTribe?: boolean; hasPendingRequest?: boolean; isAlreadyInTribe?: boolean }) => {
+      console.log('Has active membership:', hasActiveMembership);
+
+      if (hasActiveMembership) {
+        toast.error('You are already a member, founder, or moderator of another tribe. You cannot join multiple tribes.');
+        return;
+      }
+
+      // Only proceed if user has no active memberships
+      setJoiningTribeId(tribeId);
+      console.log(isPrivate)
+      if (!isPrivate) {
+        navigate(`/tribes/${tribeId}`); 
+      } else {
+        console.log('Sending join request for tribe:', tribeId);
+        try {
+          await apiService.requestMembership(tribeId);
+          toast.success('Join request sent!');
+          // Refresh the tribes list to update the button state for the joined/requested tribe
+          fetchTribes(debouncedSearchTerm);
+        } catch (error) {
+          console.error('Error sending join request:', error);
+          toast.error('Failed to send join request.');
+        } finally {
+          setJoiningTribeId(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking user memberships:', error);
+      toast.error('Failed to check your tribe memberships. Please try again.');
+      setJoiningTribeId(null);
+    }
+  };
+
+   const  renderTribeCard = (tribe: Tribe & { isUserFounder?: boolean; isMemberOfTribe?: boolean; isModeratorOfTribe?: boolean; hasPendingRequest?: boolean; isAlreadyInTribe?: boolean }) => {
     const activeMembers = tribe.memberships?.filter(m => m.status === 'ACTIVE').length || 0;
     const founderUsername = tribe.founder?.username || 'Unknown';
     const isPrivate = tribe.visibility == 'PRIVATE';
-    console.log('Rendering tribe:', tribe._id, 'visibility:', tribe.visibility, 'isPrivate:', isPrivate);
-    const isClosed = tribe.status === 'CLOSED';
+    //console.log('Rendering tribe:', tribe._id, 'visibility:', tribe.visibility, 'isPrivate:', isPrivate);
+    const isClosed = tribe.visibility === 'CLOSED';
     const isUserFounder = tribe.isUserFounder;
     const isMemberOfTribe = tribe.isMemberOfTribe;
     const isModeratorOfTribe = tribe.isModeratorOfTribe;
@@ -198,7 +241,7 @@ export default function DiscoverTribes() {
     const isAlreadyInTribe = tribe.isAlreadyInTribe;
 
     const buttonText = isClosed
-      ? 'Closed Tribe'
+      ? 'View Closed Tribe'
       : isUserFounder
       ? 'Your Tribe'
       : isMemberOfTribe
@@ -211,16 +254,32 @@ export default function DiscoverTribes() {
       ? 'Request to Join'
       : 'View Tribe'; // For public tribes
 
-    const isButtonDisabled = isClosed || isAlreadyInTribe;
+    //const isButtonDisabled = isClosed || isAlreadyInTribe;
 
     //console.log(isButtonDisabled, 'isButtonDisabled for tribe:', tribe._id);
 
     const handleButtonClick = () => {
       console.log('Button clicked for tribe:', tribe._id, 'isClosed:', isClosed, 'isAlreadyInTribe:', isAlreadyInTribe);
-      if (isClosed || isAlreadyInTribe) {
-        navigate(`/tribes/${tribe._id}`);
-      } else if ( !isAlreadyInTribe) {
+
+      console.log("BUTTON TEXT: ", buttonText)
+      if( buttonText === 'Request to Join') {
+        if(userHasTribe){
+          toast.error('You are already a member of a tribe or it is closed.');
+         }else  {
          handleJoinRequest(tribe._id, isPrivate); // Handle joining public tribe
+      }
+      }else if (isClosed || isAlreadyInTribe || userHasTribe) {
+        //some 
+        toast.error('You are already a member of a tribe or it is closed.');
+
+      } else
+      if(buttonText === 'Your Tribe' || 'Tribe Moderator' || 'Already a Member') {
+        navigate(`/tribes/${tribe._id}`); // Navigate to the tribe page if it's the user's own tribe
+        return;
+      }else 
+      if(buttonText === 'View Tribe') {
+        navigate(`/tribes/${tribe._id}`); // Navigate to public tribe
+        return;
       }
     };
 
@@ -244,24 +303,13 @@ export default function DiscoverTribes() {
               <span>Closed Tribe</span>
             </div>
             <p className="text-gray-500 text-sm mb-4">This tribe is closed. You can view posts but cannot join.</p>
-             {/* Even if closed, members should be able to view posts */}
-            {isAlreadyInTribe && (
-             <Button
-                onClick={handleButtonClick} // Use handleButtonClick for navigation
-                disabled={isButtonDisabled}
-                className="w-full bg-gray-100 text-gray-500 hover:bg-gray-200 rounded-xl mt-auto"
-              >
-                {buttonText}
-              </Button>
-            )}
-             {!isAlreadyInTribe && (
-               <Button
-                 disabled
-                 className="w-full bg-gray-100 text-gray-500 rounded-xl mt-auto"
-               >
-                 Closed Tribe
-               </Button>
-             )}
+             {/* Button for closed tribes - visible to all, navigates to profile for viewing */}
+            <Button
+              onClick={handleButtonClick} // Use handleButtonClick for navigation
+              className={`w-full mt-auto rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white`}
+            >
+              {buttonText}
+            </Button>
           </>
         ) : (
           <>
@@ -271,7 +319,11 @@ export default function DiscoverTribes() {
               ) : (
                 <Globe className="h-4 w-4 text-green-500" />
               )}
-              <span>{isPrivate ? 'Private' : 'Public'} Tribe</span>
+              {!isClosed && (
+                <div className="flex items-center gap-1">
+                  <span>{isPrivate ? 'Private' : 'Public'} Tribe</span>
+                </div>
+              )}
             </div>
             <p className="text-gray-700 text-sm mb-4 flex-grow">{tribe.description}</p>
 
@@ -283,14 +335,18 @@ export default function DiscoverTribes() {
             {!isPrivate && (
               <div className="flex items-center space-x-2 text-gray-700 text-sm mb-4">
                 <Users className="h-4 w-4" />
-                <span>Members: {activeMembers}</span>
+                {!isClosed && (
+                  <div className="flex items-center gap-1">
+                    <span>Members: {activeMembers}</span>
+                  </div>
+                )}
               </div>
             )}
 
             <Button
               onClick={handleButtonClick}
-              disabled={isButtonDisabled}
-              className={`w-full mt-auto rounded-xl ${isButtonDisabled ? 'opacity-50 ' : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white'}`}
+              //disabled={isButtonDisabled}
+              className={`w-full mt-auto rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white`}
             >
               {joiningTribeId === tribe._id ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -311,9 +367,11 @@ export default function DiscoverTribes() {
             Discover Tribes
           </h1>
 
-          {/* Create Tribe Dialog Trigger */}
+          { 
+          !userHasTribe && (
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
+              
               <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white">
                 <Plus className="mr-2 h-5 w-5" /> Create New Tribe
               </Button>
@@ -380,6 +438,8 @@ export default function DiscoverTribes() {
               </div>
             </DialogContent>
           </Dialog>
+          )}
+
         </div>
 
         <div className="flex items-center space-x-4 mb-8">
@@ -418,4 +478,4 @@ export default function DiscoverTribes() {
       </div>
     </div>
   );
-} 
+}
