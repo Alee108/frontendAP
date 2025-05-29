@@ -39,9 +39,15 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!comment.trim() || isSubmitting) return;
+    console.log('Comment value:', comment);
+    console.log('IsSubmitting value:', isSubmitting);
+    if (!comment.trim() || isSubmitting) {
+      console.log('Comment is empty or already submitting. Returning.');
+      return;
+    }
 
     setIsSubmitting(true);
+    console.log('Setting isSubmitting to true and attempting API call.');
     try {
       await apiService.addComment(post._id, comment);
       setComment('');

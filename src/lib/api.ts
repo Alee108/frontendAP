@@ -158,10 +158,19 @@ export interface Tribe {
 }
 
 export interface Comment {
-  id: string;
-  content: string;
-  author: User;
+  _id: string;
+  text: string;
+  userId: { // Matches the nested user object structure from backend
+    _id: string;
+    name?: string;
+    surname?: string;
+    username: string;
+    profilePhoto?: string | null;
+  };
   postId: string;
+  createdAt?: string;
+  updatedAt?: string;
+  __v?: number;
 }
 
 export interface Post {
@@ -465,7 +474,7 @@ export const apiService = {
   },
 
   addCommentToPost: async (postId: string, content: string) => {
-    const response = await axiosInstance.post(`/posts/${postId}/comment`, { content });
+    const response = await axiosInstance.post(`comments/post/${postId}`, {text: content });
     return response.data;
   },
 
@@ -665,7 +674,7 @@ export const apiService = {
 
   addComment: async (postId: string, content: string) => {
     try {
-      const response = await axiosInstance.post(`/posts/${postId}/comments`, { content });
+      const response = await axiosInstance.post(`/comments/post/${postId}`, { content });
       return response.data;
     } catch (error) {
       console.error('Error adding comment:', error);

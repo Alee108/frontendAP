@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { apiService, type Comment } from '../lib/api';
 import { toast } from 'sonner';
 import { Send } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserIcon } from 'lucide-react';
 
 interface CommentSectionProps {
   postId: string;
@@ -19,7 +21,9 @@ export function CommentSection({ postId, comments, onCommentAdded }: CommentSect
 
     setIsSubmitting(true);
     try {
-      const comment = await apiService.createComment(postId, newComment);
+      const comment = await apiService.addCommentToPost(postId, newComment);
+      // Ensure the comment has the correct structure before passing it up
+      console.log(comment)
       onCommentAdded(comment);
       setNewComment('');
     } catch (error) {
@@ -49,20 +53,25 @@ export function CommentSection({ postId, comments, onCommentAdded }: CommentSect
       </form>
 
       <div className="space-y-3">
-        {comments.map((comment) => (
-          <div key={comment.id} className="flex items-start space-x-3">
-            <img
-              src={comment.author.profilePhoto}
-              alt={comment.author.name}
-              className="h-8 w-8 rounded-full object-cover"
-            />
-            <div className="flex-1 rounded-lg bg-muted/50 p-3">
-              <p className="text-sm font-medium">{comment.author.name}</p>
-              <p className="text-sm text-muted-foreground">{comment.content}</p>
+        {comments.map((comment, index) => (
+          console.log(comment),
+          <div key={comment._id ?? index} className="flex items-start space-x-3 bg-muted/50 rounded-xl p-3">
+            <Avatar className="h-8 w-8">
+              <AvatarImage
+                src={comment.userId?.profilePhoto || undefined}
+                alt={comment.userId?.username || 'User'}
+              />
+              <AvatarFallback>
+                <UserIcon className="h-4 w-4" />
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <p className="text-sm font-medium">{comment.userId?.username || 'User'}</p>
+              <p className="text-sm text-muted-foreground">{comment.text}</p>
             </div>
           </div>
         ))}
       </div>
     </div>
   );
-} 
+}

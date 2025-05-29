@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { apiService, type Tribe, type User, type Comment as ApiComment, Membership } from '../lib/api';
+import { apiService, type Tribe, type User, type Comment, Membership } from '../lib/api';
 import { type Post } from '../types/post';
 import { toast } from 'sonner';
 import { Loader2, Heart, MessageCircle, Users, Lock, Globe, User as UserIcon, UserPlus, Edit2, Save, X } from 'lucide-react';
@@ -32,7 +32,7 @@ export default function TribeProfile() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
-  const [comments, setComments] = useState<Record<string, ApiComment[]>>({});
+  const [comments, setComments] = useState<Record<string, Comment[]>>({});
   const [loadingComments, setLoadingComments] = useState<Record<string, boolean>>({});
   const [joining, setJoining] = useState(false);
   const [showMembersList, setShowMembersList] = useState(false);
@@ -185,17 +185,47 @@ export default function TribeProfile() {
     }
   };
 
-  const handleCommentAdded = (postId: string, comment: ApiComment) => {
-    setPosts((prev) =>
-      prev.map((post) =>
-        post._id === postId
-          ? { ...post, commentCount: post.commentCount + 1 }
-          : post
-      )
+  const handleCommentAdded = (postId: string, comment: Comment) => {
+    // The comment object received here should match the updated Comment interface
+    const backendComment = comment; // Alias for clarity
+
+    // Create comment object for the 'posts' state (matches Post interface comments array structure)
+    const commentToPostState = {
+      _id: backendComment._id,
+      content: backendComment.text, // Map text to content for Post interface
+      userId: { // Structure matching Post.comments array
+        _id: backendComment.userId._id,
+        username: backendComment.userId.username,
+        profilePhoto: backendComment.userId.profilePhoto || null // Ensure profilePhoto is nullable
+      },
+    };
+
+    // Create comment object for the 'comments' state (matches updated Comment interface structure)
+    // This object can largely use the fields directly from backendComment as the interface now matches
+    const commentToCommentsState: Comment = backendComment;
+
+    // Update the post's comment count and comments array
+    setPosts((prevPosts) => 
+      prevPosts.map((post) => {
+        if (post._id === postId) {
+          const currentCommentCount = typeof post.commentCount === 'number' ? post.commentCount : 0;
+          return {
+            ...post,
+            commentCount: currentCommentCount + 1,
+            comments: [
+              commentToPostState,
+              ...(post.comments || [])
+            ]
+          };
+        }
+        return post;
+      })
     );
-    setComments((prev) => ({
-      ...prev,
-      [postId]: [comment, ...(prev[postId] || [])],
+
+    // Update the comments state (used by CommentSection directly)
+    setComments((prevComments) => ({
+      ...prevComments,
+      [postId]: [commentToCommentsState, ...(prevComments[postId] || [])]
     }));
   };
 
@@ -483,7 +513,7 @@ export default function TribeProfile() {
                               </div>
                               <div className="flex items-center gap-1 text-gray-600 cursor-pointer" onClick={() => setExpandedPost(expandedPost === post._id ? null : post._id)}>
                                 <MessageCircle className="h-5 w-5" />
-                                <span>{post.commentCount}</span>
+                                <span>{post.comments.length}</span>
                               </div>
                             </div>
 
@@ -735,7 +765,7 @@ export default function TribeProfile() {
                                     </div>
                                     <div className="flex items-center gap-1 text-gray-600 cursor-pointer" onClick={() => setExpandedPost(expandedPost === post._id ? null : post._id)}>
                                         <MessageCircle className="h-5 w-5" />
-                                        <span>{post.commentCount}</span>
+                                        <span>{post.comments.length}</span>
                                     </div>
                                 </div>
 
