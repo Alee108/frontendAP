@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, User as UserIcon, Mail, Calendar, Users, Edit, Save, X, Heart, Image as ImageIcon, MapPin, Check, ArrowLeft } from 'lucide-react';
+import { Loader2, User as UserIcon, Mail, Calendar, Users, Edit, Save, X, Heart, Image as ImageIcon, MapPin, Check, ArrowLeft, NotebookText } from 'lucide-react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -445,7 +445,7 @@ export default function Profile() {
             
             <div className="flex-grow text-center md:text-left">
               {/* Top row: Username/Name/Surname and My Tribes */}
-              <div className="flex flex-col md:flex-row justify-between gap-4 mb-4 items-start">
+              <div className="flex flex-col md:flex-row justify-between gap-4  items-start">
                 {/* Username/Name/Surname Block */}
                 <div className="flex flex-col">
                    {isEditing ? (
@@ -479,7 +479,12 @@ export default function Profile() {
                         />
                       </div>
                    ) : (
-                      user.name && <p className="text-gray-600 mb-2">{user.name}</p>
+                      (user.name || user.surname) && (
+                        <div className="text-gray-600  flex gap-1">
+                          {user.name && <span>{user.name}</span>}
+                          {user.surname && <span>{user.surname}</span>}
+                        </div>
+                      )
                    )}
 
                    {isEditing ? (
@@ -495,17 +500,15 @@ export default function Profile() {
                           className="mt-1"
                         />
                       </div>
-                   ) : (
-                      user.surname && <p className="text-gray-600 mb-2">{user.surname}</p>
-                   )}
+                   ) : null}
 
                 </div>
 
                 {/* My Tribes Section - Only for current user - Moved and Styled */}
                 {isCurrentUser && userMemberships.length > 0 && (
                   <div className="md:ml-auto flex-shrink-0">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Users className="h-4 w-4" />
+                    <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2 pl-2">
+                      <Users className="h-4 w-4 " />
                       My Tribes
                     </h3>
                     <div className="flex flex-col gap-2">
@@ -555,7 +558,12 @@ export default function Profile() {
                    />
                  </div>
               ) : (
-                user.bio && <p className="text-gray-700 mb-4">{user.bio}</p>
+                user.bio && (
+                  <div className="flex items-center gap-2 text-gray-700 mt-1 mb-2">
+                    <NotebookText className="h-4 w-4" />
+                    <span>{user.bio}</span>
+                  </div>
+                )
               )}
              
               <div className="flex flex-col gap-2 text-sm text-gray-600">
