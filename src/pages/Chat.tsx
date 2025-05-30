@@ -1,12 +1,41 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../lib/auth-context';
 import { io, Socket } from 'socket.io-client';
 import { apiService, PopulatedUser, ReceivedMessage, SimplifiedMessage, ChatInfo } from "../lib/api";
 import { toast } from 'sonner';
 import { Search as SearchIcon, User as UserIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+const API_URL = 'http://localhost:3001';
+
+// Funzione helper per formattare la data
+const formatMessageTime = (dateString: string) => {
+  const messageDate = new Date(dateString);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  const messageDateOnly = new Date(messageDate.getFullYear(), messageDate.getMonth(), messageDate.getDate());
+
+  if (messageDateOnly.getTime() === today.getTime()) {
+    // Oggi - mostra solo l'ora
+    return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else if (messageDateOnly.getTime() === yesterday.getTime()) {
+    // Ieri
+    return 'Yesterday';
+  } else {
+    // Altri giorni - mostra la data
+    return messageDate.toLocaleDateString([], { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: messageDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined 
+    });
+  }
+};
 
 export default function Chat() {
-  const { user, loading: authLoading, socket } = useAuth();
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<SimplifiedMessage[]>([]);
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [selectedChatUser, setSelectedChatUser] = useState<PopulatedUser | null>(null);
@@ -16,13 +45,120 @@ export default function Chat() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<PopulatedUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [unreadChats, setUnreadChats] = useState<Set<string>>(new Set());
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Ref per tenere traccia del selectedChat corrente
+  const selectedChatRef = useRef<string | null>(null);
+  const userRef = useRef<any>(null);
+
+  // Aggiorna i ref quando cambiano i valori
+  useEffect(() => {
+    selectedChatRef.current = selectedChat;
+  }, [selectedChat]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  // Inizializzazione del socket
+  useEffect(() => {
+    if (user) {
+      const token = apiService.verifyToken();
+      if (!token) return;
+
+      console.log('Connecting to chat socket...');
+
+      const newSocket = io(API_URL, {
+        auth: { 
+          token: apiService.verifyToken(),
+          type: 'user'
+        },
+        transports: ['websocket'],
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        timeout: 10000,
+        autoConnect: true,
+        forceNew: true
+      });
+
+      newSocket.on('connect', () => {
+        console.log('Chat socket connected successfully');
+        if (user._id) {
+          fetchChats(user._id);
+        }
+      });
+
+      newSocket.on('connect_error', (error) => {
+        console.error('Chat socket connection error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        });
+        
+        // Check if the error is an unauthorized error
+        if (error.message.includes('Unauthorized') || error.message.includes('unauthorized')) {
+          toast.error('Session expired. Please login again.');
+          // Clear any existing auth data
+          apiService.logout();
+          // Redirect to login
+          navigate('/login');
+          return;
+        }
+        
+        toast.error(`Failed to connect to chat service: ${error.message}`);
+      });
+
+      newSocket.on('error', (error) => {
+        console.error('Chat socket error:', error);
+        toast.error(`Socket error: ${error.message}`);
+      });
+
+      newSocket.on('disconnect', (reason) => {
+        console.log('Chat socket disconnected:', reason);
+        
+        switch (reason) {
+          case 'io server disconnect':
+            console.log('Server disconnected, attempting to reconnect...');
+            setTimeout(() => {
+              newSocket.connect();
+            }, 1000);
+            break;
+          case 'transport close':
+            console.log('Connection lost, attempting to reconnect...');
+            break;
+          case 'transport error':
+            console.log('Transport error, attempting to reconnect...');
+            break;
+          default:
+            console.log('Disconnected for reason:', reason);
+        }
+      });
+
+      newSocket.on('receive', (msg: any) => {
+        console.log("Chat socket receive event triggered with message:", msg);
+        console.log("Current user:", userRef.current);
+        console.log("Current selected chat:", selectedChatRef.current);
+        handleReceiveMessage(msg);
+      });
+
+      setSocket(newSocket);
+
+      return () => {
+        if (newSocket.connected) {
+          newSocket.disconnect();
+        }
+      };
+    }
+  }, [user, navigate]);
 
   const fetchChats = useCallback(async (userId: string) => {
     console.log(`Fetching chats for user: ${userId}`);
     try {
       setIsLoadingInitialChats(true);
-      const data = await apiService.getUserConversations(userId);
-      console.log('Fetched chats raw data:', data);
+      const data = (await apiService.getUserConversations(userId)).reverse();
+
       const validatedChats = Array.isArray(data) ? data.filter(chat => 
         chat && chat.userId && Array.isArray(chat.messages)
       ) : [];
@@ -37,125 +173,63 @@ export default function Chat() {
     }
   }, []);
 
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   useEffect(() => {
-    console.log('First useEffect running:', { user, authLoading, socket: !!socket });
-    if (authLoading || !user?._id || !socket) { 
-      console.log('useEffect for socket listener and initial fetch returning early', { authLoading, user, socket: !!socket });
-      setChats([]);
-      setMessages([]);
-      setSelectedChat(null);
-      setSelectedChatUser(null);
-      setIsLoadingInitialChats(false);
+    scrollToBottom();
+  }, [messages]);
+
+  const handleReceiveMessage = (message) => {
+    console.log('Processing received message:', message);
+
+    if (!message || !message.sender || !message.receiver || (!message.message && !message.message_text)) {
+      console.error('Received invalid message format:', message);
       return;
     }
 
-    const handleReceiveMessage = (message: ReceivedMessage) => {
-      console.log('Received message:', message);
+    const currentUser = userRef.current;
+    const currentSelectedChat = selectedChatRef.current;
 
-      if (!message || !message.sender || !message.receiver || (!message.message && !message.message_text)) {
-        console.error('Received invalid message format:', message);
-        return;
-      }
+    if (!currentUser) {
+      console.error('No current user found in handleReceiveMessage');
+      return;
+    }
 
-      const messageForCurrentUser = message.sender._id === user._id || message.receiver._id === user._id;
-      if (!messageForCurrentUser) {
-        console.log('Received message is not for current user, ignoring.');
-        return;
-      }
+    const messageForCurrentUser = message.sender._id === currentUser._id || message.receiver._id === currentUser._id;
+    if (!messageForCurrentUser) {
+      console.log('Message not for current user, ignoring in handleReceiveMessage');
+      return;
+    }
 
-      const relevantChatId = message.sender._id === user._id ? message.receiver._id : message.sender._id;
-      const messageContent = message.message || message.message_text;
+    const relevantChatId = message.sender._id === currentUser._id ? message.receiver._id : message.sender._id;
+    const messageContent = message.message || message.message_text;
 
-      // Update chats list
-      setChats(prevChats => {
-        const chatIndex = prevChats.findIndex(chat => chat.userId === relevantChatId);
-        let updatedChats = [...prevChats];
+    // Se il messaggio è da un altro utente e non siamo nella chat corrente, aggiungiamo l'ID della chat agli unread
+    if (message.sender._id !== currentUser._id && relevantChatId !== currentSelectedChat) {
+      setUnreadChats(prev => new Set([...prev, relevantChatId]));
+    }
 
-        if (chatIndex > -1) {
-          const chatToUpdate = { ...updatedChats[chatIndex] };
-          const isDuplicate = chatToUpdate.messages.some(msg => 
-            msg.id === message.id || 
-            (msg.message === messageContent && 
-             msg.senderId === message.sender._id && 
-             msg.receiverId === message.receiver._id)
-          );
-          
-          if (!isDuplicate) {
-            const newMessage: SimplifiedMessage = {
-              id: message.id,
-              message: messageContent,
-              sender: message.sender,
-              receiver: message.receiver,
-              sent_at: message.sent_at,
-              senderId: message.sender._id,
-              receiverId: message.receiver._id
-            };
+    console.log('Updating chats with new message:', {
+      relevantChatId,
+      messageContent,
+      currentSelectedChat
+    });
 
-            // If this is a confirmation of our own message, replace the temporary message
-            if (message.sender._id === user._id) {
-              chatToUpdate.messages = chatToUpdate.messages.map(msg => 
-                msg.id.startsWith('temp-') && msg.message === messageContent ? newMessage : msg
-              );
-            } else {
-              chatToUpdate.messages = [...chatToUpdate.messages, newMessage];
-            }
+    // Update chats list
+    setChats(prevChats => {
+      const chatIndex = prevChats.findIndex(chat => chat.userId === relevantChatId);
+      let updatedChats = [...prevChats];
 
-            chatToUpdate.lastMessage = {
-              text: messageContent,
-              sent_at: message.sent_at
-            };
-            updatedChats[chatIndex] = chatToUpdate;
-          }
-        } else {
-          console.log('Creating new chat entry for received message', message);
-          const otherUser = message.sender._id === user._id ? message.receiver : message.sender;
-          const newChat: ChatInfo = {
-            userId: otherUser._id,
-            username: otherUser.username,
-            email: otherUser.email,
-            profilePhoto: otherUser.profilePhoto,
-            messages: [{
-              id: message.id,
-              message: messageContent,
-              sender: message.sender,
-              receiver: message.receiver,
-              sent_at: message.sent_at,
-              senderId: message.sender._id,
-              receiverId: message.receiver._id
-            }],
-            lastMessage: {
-              text: messageContent,
-              sent_at: message.sent_at
-            }
-          };
-          updatedChats = [newChat, ...updatedChats];
-        }
-
-        // Sort chats by last message time
-        updatedChats.sort((a, b) => {
-          const lastMsgA = a.lastMessage?.sent_at;
-          const lastMsgB = b.lastMessage?.sent_at;
-          if (!lastMsgA) return 1;
-          if (!lastMsgB) return -1;
-          return new Date(lastMsgB).getTime() - new Date(lastMsgA).getTime();
-        });
-
-        return updatedChats;
-      });
-
-      // Update current chat messages if this chat is selected
-      if (selectedChat && relevantChatId === selectedChat) {
-        setMessages(prev => {
-          const isDuplicate = prev.some(msg => 
-            msg.id === message.id || 
-            (msg.message === messageContent && 
-             msg.senderId === message.sender._id && 
-             msg.receiverId === message.receiver._id)
-          );
-          
-          if (isDuplicate) return prev;
-          
-          const newMessage: SimplifiedMessage = {
+      if (chatIndex > -1) {
+        const chatToUpdate = { ...updatedChats[chatIndex] };
+        
+        // Controllo duplicati più preciso
+        
+        
+          console.log('Adding new message to existing chat');
+          const newMessage = {
             id: message.id,
             message: messageContent,
             sender: message.sender,
@@ -165,60 +239,114 @@ export default function Chat() {
             receiverId: message.receiver._id
           };
 
-          // If this is a confirmation of our own message, replace the temporary message
-          if (message.sender._id === user._id) {
-            return prev.map(msg => 
-              msg.id.startsWith('temp-') && msg.message === messageContent ? newMessage : msg
+          // Se è una conferma del nostro messaggio, sostituisci il messaggio temporaneo
+          if (message.sender._id === currentUser._id) {
+            const tempMessageIndex = chatToUpdate.messages.findIndex(msg => 
+              msg.id.startsWith('temp-') && msg.message === messageContent
             );
+            if (tempMessageIndex > -1) {
+              chatToUpdate.messages[tempMessageIndex] = newMessage;
+            } else {
+              chatToUpdate.messages = [...chatToUpdate.messages, newMessage];
+            }
+          } else {
+            chatToUpdate.messages = [...chatToUpdate.messages, newMessage];
           }
 
-          return [...prev, newMessage];
-        });
+          chatToUpdate.lastMessage = {
+            text: messageContent,
+            sent_at: message.sent_at,
+            senderId: message.sender._id
+          };
+          updatedChats[chatIndex] = chatToUpdate;
+          // Sposta la chat aggiornata in cima alla lista
+          updatedChats.splice(chatIndex, 1);
+          updatedChats.unshift(chatToUpdate);
+        
+          
+      } else {
+        console.log('Creating new chat entry for received message');
+        const otherUser = message.sender._id === currentUser._id ? message.receiver : message.sender;
+        const newChat: ChatInfo = {
+          id: `temp-${Date.now()}`,
+          participants: [message.sender._id, message.receiver._id],
+          userId: otherUser._id,
+          username: otherUser.username,
+          email: otherUser.email,
+          profilePhoto: otherUser.profilePhoto,
+          messages: [{
+            id: message.id,
+            message: messageContent,
+            sender: message.sender,
+            receiver: message.receiver,
+            sent_at: message.sent_at,
+            senderId: message.sender._id,
+            receiverId: message.receiver._id
+          }],
+          lastMessage: {
+            text: messageContent,
+            sent_at: message.sent_at,
+            senderId: message.sender._id
+          }
+        };
+        // Aggiungi la nuova chat in cima alla lista
+        updatedChats = [newChat, ...updatedChats];
       }
-    };
 
-    // Set up socket event listeners
-    socket.on('receive', handleReceiveMessage);
-    socket.on('error', (error: Error) => {
-      console.error('Socket error:', error);
-      toast.error('Connection error. Please try refreshing the page.');
-    });
-    socket.on('disconnect', (reason: string) => {
-      console.log('Socket disconnected:', reason);
-      if (reason === 'io server disconnect') {
-        toast.warning('Connection lost. Please refresh the page.');
-      } else if (reason === 'transport close') {
-        toast.warning('Connection closed. Attempting to reconnect...');
-      } else if (reason === 'ping timeout') {
-        toast.warning('Connection timeout. Attempting to reconnect...');
-      }
+      return updatedChats;
     });
 
-    // Initial fetch of chats
-    if (user._id) {
-      fetchChats(user._id);
+    // Aggiorna i messaggi della chat corrente se è selezionata
+    if (currentSelectedChat && relevantChatId === currentSelectedChat) {
+      console.log('Updating current chat messages');
+      setMessages(prev => {
+        const isDuplicate = prev.some(msg => 
+          msg.id === message.id || 
+          (msg.message === messageContent && 
+           msg.senderId === message.sender._id && 
+           msg.receiverId === message.receiver._id &&
+           Math.abs(new Date(msg.sent_at).getTime() - new Date(message.sent_at).getTime()) < 1000)
+        );
+        
+        if (isDuplicate) {
+          console.log('Duplicate message in current chat, skipping');
+          return prev;
+        }
+        
+        const newMessage = {
+          id: message.id,
+          message: messageContent,
+          sender: message.sender,
+          receiver: message.receiver,
+          sent_at: message.sent_at,
+          senderId: message.sender._id,
+          receiverId: message.receiver._id
+        };
+
+        // Se è una conferma del nostro messaggio, sostituisci il messaggio temporaneo
+        if (message.sender._id === currentUser._id) {
+          const tempMessageIndex = prev.findIndex(msg => 
+            msg.id.startsWith('temp-') && msg.message === messageContent
+          );
+          if (tempMessageIndex > -1) {
+            const newMessages = [...prev];
+            newMessages[tempMessageIndex] = newMessage;
+            return newMessages;
+          }
+        }
+
+        return [...prev, newMessage];
+      });
     }
-
-    // Cleanup
-    return () => {
-      console.log('First useEffect cleanup running');
-      if (socket) {
-        socket.off('receive', handleReceiveMessage);
-        socket.off('error');
-        socket.off('disconnect');
-      }
-    };
-  }, [user?._id, authLoading, socket, fetchChats, selectedChat]);
+  };
 
   useEffect(() => {
-    console.log('Second useEffect running:', { selectedChat, user, chats: chats.length });
+    console.log('Selected chat useEffect running:', { selectedChat, user, chats: chats.length });
     if (selectedChat && user?._id) {
-      console.log(`Loading chat details for selected chat: ${selectedChat}`);
 
       const currentChat = chats.find(chat => chat.userId === selectedChat);
 
       if (currentChat) {
-        console.log('Found existing chat in chats state, setting messages and user details');
         const validMessages = Array.isArray(currentChat.messages) 
           ? currentChat.messages.filter(msg => 
               msg && msg.id && msg.message && msg.sender && msg.receiver
@@ -232,31 +360,25 @@ export default function Chat() {
           email: currentChat.email,
           profilePhoto: currentChat.profilePhoto
         };
-        console.log('Setting selected chat user from existing chat:', otherUser);
         setSelectedChatUser(otherUser);
       } else {
-        console.log('Selected chat not found in chats state, assuming new chat with user previously selected.');
         setMessages([]);
       }
     } else if (!selectedChat) {
-      console.log('No chat selected, clearing state');
       setMessages([]);
       setSelectedChatUser(null);
     }
   }, [selectedChat, chats, user?._id]);
 
   const handleSearch = async (query: string) => {
-    console.log('Handling search for query:', query);
     setSearchTerm(query);
     if (!query) {
-      console.log('Search query is empty, clearing results.');
       setSearchResults([]);
       return;
     }
     setIsSearching(true);
     try {
       const data = await apiService.searchUsers(query);
-      console.log('Search results:', data);
       setSearchResults(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error searching users:', error);
@@ -264,18 +386,15 @@ export default function Chat() {
       setSearchResults([]);
     } finally {
       setIsSearching(false);
-       console.log('Search finished.');
     }
   };
 
   const startNewChat = (userResult: PopulatedUser) => {
-    console.log('Attempting to start a new chat with user:', userResult);
     const existingChat = chats.find(chat => 
       chat.userId === userResult._id
     );
 
     if (existingChat) {
-      console.log('Chat with user already exists, selecting existing chat.', existingChat);
       setSelectedChat(existingChat.userId);
       const otherUser = { 
         _id: existingChat.userId, 
@@ -285,7 +404,6 @@ export default function Chat() {
       } as PopulatedUser;
       setSelectedChatUser(otherUser);
     } else {
-      console.log('Chat with user does not exist, preparing for a new chat.');
       setSelectedChat(userResult._id);
       setSelectedChatUser(userResult);
       setMessages([]);
@@ -295,16 +413,10 @@ export default function Chat() {
     setSearchResults([]);
   };
 
-  const sendMessage = () => {
-    console.log('Attempting to send message:', { newMessage, socket: !!socket, user: !!user, selectedChatUser: !!selectedChatUser });
-    if (!newMessage.trim() || !socket || !user?._id || !selectedChatUser?._id) {
-      console.log('Cannot send message: missing required data');
-      return;
+  const sendMessage = () => {    if (!newMessage.trim() || !socket || !user?._id || !selectedChatUser?._id) {      return;
     }
 
     const conversationId = chats.find(chat => chat.userId === selectedChat)?.userId || selectedChat;
-    console.log('Determined conversationId:', conversationId);
-
     const messageData = {
       sender: user._id, 
       receiver: selectedChatUser._id,
@@ -312,15 +424,13 @@ export default function Chat() {
       conversationId: conversationId !== selectedChatUser._id ? conversationId : undefined
     };
 
-    const tempMessageId = 'temp-' + Date.now();
-    console.log('Sending message via socket:', messageData);
-    
+    const tempMessageId = 'temp-' + Date.now();    
     // Add error handling for socket emit
     socket.emit('send', messageData, (error: Error | null) => {
       if (error) {
         console.error('Error sending message:', error);
         toast.error('Failed to send message. Please try again.');
-        // Remove the temporary message if sending failed
+        // Rimuovi il messaggio temporaneo se l'invio fallisce
         setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
         setChats(prevChats => {
           const chatIndex = prevChats.findIndex(chat => chat.userId === selectedChat);
@@ -347,25 +457,22 @@ export default function Chat() {
       senderId: user._id,
       receiverId: selectedChatUser._id
     };
-
-    console.log('Optimistically adding message to UI:', tempMessage);
     setMessages(prev => [
       ...prev,
       tempMessage
     ]);
 
-    setChats(prevChats => {
-      console.log('Updating chats state optimistically.');
-      const chatIndex = prevChats.findIndex(chat => chat.userId === selectedChat);
+    setChats(prevChats => {      const chatIndex = prevChats.findIndex(chat => chat.userId === selectedChat);
       let updatedChats = [...prevChats];
 
-      if (chatIndex > -1) {
-        console.log('Updating existing chat in chats list.');
-        const chatToUpdate = { ...updatedChats[chatIndex] };
-        chatToUpdate.messages = [...chatToUpdate.messages, tempMessage]; 
-        chatToUpdate.lastMessage = {
-          text: tempMessage.message,
-          sent_at: tempMessage.sent_at
+      if (chatIndex > -1) {        const chatToUpdate: ChatInfo = {
+          ...updatedChats[chatIndex],
+          messages: [...updatedChats[chatIndex].messages, tempMessage],
+          lastMessage: {
+            text: tempMessage.message,
+            sent_at: tempMessage.sent_at,
+            senderId: tempMessage.senderId
+          }
         };
         updatedChats.splice(chatIndex, 1);
         updatedChats.unshift(chatToUpdate);
@@ -373,14 +480,17 @@ export default function Chat() {
         console.warn('Sending message to a user without an existing chat entry in chats list. Creating new temporary chat entry.');
         if (selectedChatUser && user) {
           const newChat: ChatInfo = {
-            userId: selectedChatUser._id, 
-            username: selectedChatUser.username, 
-            email: selectedChatUser.email, 
+            id: `temp-${Date.now()}`,
+            participants: [user._id, selectedChatUser._id],
+            userId: selectedChatUser._id,
+            username: selectedChatUser.username,
+            email: selectedChatUser.email,
             profilePhoto: selectedChatUser.profilePhoto,
-            messages: [tempMessage], 
+            messages: [tempMessage],
             lastMessage: {
               text: tempMessage.message,
-              sent_at: tempMessage.sent_at
+              sent_at: tempMessage.sent_at,
+              senderId: tempMessage.senderId
             }
           };
           updatedChats.unshift(newChat);
@@ -393,7 +503,13 @@ export default function Chat() {
 
   const selectChat = (chat: ChatInfo) => {
     console.log('Selecting chat:', chat);
-    setSelectedChat(chat.userId); 
+    setSelectedChat(chat.userId);
+    // Rimuovi la chat dagli unread quando viene selezionata
+    setUnreadChats(prev => {
+      const newUnread = new Set(prev);
+      newUnread.delete(chat.userId);
+      return newUnread;
+    });
   };
 
   const overallLoading = authLoading || isLoadingInitialChats;
@@ -498,7 +614,13 @@ export default function Chat() {
               return (
                 <button
                   key={chat.userId}
-                  className={`flex flex-row items-center p-3 rounded-xl ${selectedChat === chat.userId ? 'bg-indigo-100' : 'hover:bg-gray-100'}`}
+                  className={`flex flex-row items-center p-3 rounded-xl ${
+                    selectedChat === chat.userId 
+                      ? 'bg-indigo-100' 
+                      : unreadChats.has(chat.userId)
+                        ? 'border-2 border-green-500 hover:bg-gray-100'
+                        : 'hover:bg-gray-100'
+                  }`}
                   onClick={() => selectChat(chat)}
                 >
                   <div className="flex-shrink-0">
@@ -517,12 +639,15 @@ export default function Chat() {
                   <div className="flex-grow ml-3 text-left">
                     <div className="text-sm font-semibold">{otherUser.username}</div>
                     {chat.lastMessage && (
-                      <span className="text-xs truncate block">{chat.lastMessage.text}</span>
+                      <span className="text-xs truncate block text-gray-500">
+                        {chat.lastMessage.senderId === user?._id ? 'You: ' : ''}
+                        {chat.lastMessage.text}
+                      </span>
                     )}
                   </div>
                    {chat.lastMessage && (
                      <div className="text-xs text-gray-500 ml-auto flex-shrink-0">
-                       {new Date(chat.lastMessage.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                       {formatMessageTime(chat.lastMessage.sent_at)}
                      </div>
                    )}
                 </button>
@@ -562,37 +687,40 @@ export default function Chat() {
                   {messages.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-500">Start of conversation</div>
                   ) : (
-                    messages.map((message, index) => (
-                      <div 
-                        key={message.id || index}
-                        className={`flex w-full mt-2 space-x-3 max-w-xs ${message.sender._id === user?._id ? 'ml-auto justify-end' : ''}`}
-                      >
-                         {message.sender._id !== user?._id && message.sender.profilePhoto && (
-                            <div className="flex-shrink-0">
-                              <img className="h-10 w-10 rounded-full" src={message.sender.profilePhoto} alt={message.sender.username} />
-                            </div>
-                          )}
-                         {message.sender._id !== user?._id && !message.sender.profilePhoto && message.sender.username && (
-                             <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
-                               {message.sender.username.charAt(0).toUpperCase()}
-                             </div>
-                         )}
+                    <>
+                      {messages.map((message, index) => (
+                        <div 
+                          key={message.id || index}
+                          className={`flex w-full mt-2 space-x-3 max-w-xs ${message.sender._id === user?._id ? 'ml-auto justify-end' : ''}`}
+                        >
+                           {message.sender._id !== user?._id && message.sender.profilePhoto && (
+                              <div className="flex-shrink-0">
+                                <img className="h-10 w-10 rounded-full" src={message.sender.profilePhoto} alt={message.sender.username} />
+                              </div>
+                            )}
+                           {message.sender._id !== user?._id && !message.sender.profilePhoto && message.sender.username && (
+                               <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
+                                 {message.sender.username.charAt(0).toUpperCase()}
+                               </div>
+                           )}
 
-                        <div>
-                          <div className={`px-4 py-2 rounded-lg inline-block ${message.sender._id === user?._id ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                            {message.message}
-                          </div>
-                          <span className={`block text-xs text-gray-500 mt-1 ${message.sender._id === user?._id ? 'text-right' : 'text-left'}`}>
-                            {new Date(message.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                         {message.sender._id === user?._id && message.sender.profilePhoto && (
-                            <div className="flex-shrink-0">
-                              <img className="h-10 w-10 rounded-full" src={message.sender.profilePhoto} alt={message.sender.username} />
+                          <div>
+                            <div className={`px-4 py-2 rounded-lg inline-block ${message.sender._id === user?._id ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                              {message.message}
                             </div>
-                         )}
-                      </div>
-                    ))
+                            <span className={`block text-xs text-gray-500 mt-1 ${message.sender._id === user?._id ? 'text-right' : 'text-left'}`}>
+                              {new Date(message.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                           {message.sender._id === user?._id && message.sender.profilePhoto && (
+                              <div className="flex-shrink-0">
+                                <img className="h-10 w-10 rounded-full" src={message.sender.profilePhoto} alt={message.sender.username} />
+                              </div>
+                           )}
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </>
                   )}
                 </div>
               </div>

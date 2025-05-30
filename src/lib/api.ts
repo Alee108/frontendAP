@@ -248,16 +248,17 @@ export interface SimplifiedMessage {
 
 // Updated to match backend's ChatInfo structure
 export interface ChatInfo {
-  id: string; // Corresponds to backend's ChatInfo id
-  chatId?: string; // backend might send chatId sometimes? Add for safety
-  participants: PopulatedUser[]; // Array of PopulatedUser
-  username: string; // The username of the *other* user
-  email: string; // The email of the *other* user
-  profilePhoto?: string; // The profile photo of the *other* user
-  messages: SimplifiedMessage[]; // Array of SimplifiedMessage
-  lastMessage?: { // lastMessage might be optional in backend response for new chats?
+  id: string;
+  participants: string[];
+  userId: string;
+  username: string;
+  email: string;
+  profilePhoto?: string;
+  messages: SimplifiedMessage[];
+  lastMessage: {
     text: string;
     sent_at: string;
+    senderId: string;
   };
 }
 
