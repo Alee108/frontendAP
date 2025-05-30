@@ -18,12 +18,18 @@ interface PostCardProps {
 export function PostCard({ post, onPostUpdate }: PostCardProps) {
   const { user, updateUserFollowing } = useAuth();
   const navigate = useNavigate();
+  
   const isAlreadyFollowing = user?.following?.some(
     (followingId: string) => followingId === post.userId._id
   ) || false;
+  
   const [isLiked, setIsLiked] = useState(post.likes?.includes(user?._id || '') || false);
   const [isFollowing, setIsFollowing] = useState(isAlreadyFollowing);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // State per gestire la visibilità dei commenti
+  const [showComments, setShowComments] = useState(false);
+  const [hasNewComment, setHasNewComment] = useState(false);
 
   useEffect(() => {
     const following = user?.following?.some(
@@ -114,7 +120,6 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
 
   const handleDeletePost = async () => {
     if (!user || user._id !== post.userId._id) return;
-    
     setIsDeleting(true);
     try {
       await apiService.deletePost(post._id);
@@ -132,8 +137,20 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
     // Assuming the received 'comment' already matches the frontend Comment type (ApiCommentType)
     setComments(prev => [comment, ...prev]);
     
+    // Mostra automaticamente i commenti quando ne viene aggiunto uno nuovo
+    setShowComments(true);
+    setHasNewComment(true);
+    
     // Aggiorna il post per aggiornare il contatore (richiedendo i post aggiornati dall'API)
     onPostUpdate();
+  };
+
+  // Funzione per gestire il click sull'icona dei commenti
+  const handleCommentsToggle = () => {
+    setShowComments(prev => !prev);
+    if (hasNewComment) {
+      setHasNewComment(false);
+    }
   };
 
   if (!post.userId) {
@@ -156,7 +173,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
               onClick={handleUserClick}
             />
           ) : (
-            <div 
+            <div
               className="w-10 h-10 rounded-full mr-3 bg-gray-200 flex items-center justify-center cursor-pointer"
               onClick={handleUserClick}
             >
@@ -164,7 +181,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
             </div>
           )}
           <div>
-            <h3 
+            <h3
               className="font-semibold cursor-pointer hover:text-blue-500"
               onClick={handleUserClick}
             >
@@ -177,7 +194,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
         {/* Tribe Info and Post Actions */}
         <div className="flex items-center gap-4">
           {post.tribe && (
-            <div 
+            <div
               className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg"
               onClick={handleTribeClick}
             >
@@ -249,7 +266,6 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
 
       {/* Post Content */}
       <p className="mb-4">{post.description}</p>
-      
       {post.base64Image && (
         <img
           src={post.base64Image}
@@ -267,21 +283,34 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
           <Heart className={isLiked ? 'fill-current' : ''} />
           <span>{post.likes.length}</span>
         </button>
-        <div className="flex items-center gap-1 text-gray-500 hover:text-blue-500 transition-colors">
-          <MessageCircle />
+        
+        <button
+          onClick={handleCommentsToggle}
+          className={`flex items-center gap-1 transition-colors relative ${
+            showComments ? 'text-blue-500' : 'text-gray-500 hover:text-blue-500'
+          }`}
+        >
+          <MessageCircle className={showComments ? 'fill-current' : ''} />
           <span>{comments.length}</span>
-        </div>
+          {/* Indicatore per nuovo commento */}
+          {hasNewComment && !showComments && (
+            <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></div>
+          )}
+        </button>
+        
         <span className="text-sm text-gray-500">
           {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
         </span>
       </div>
 
-      {/* Comment Section */}
-      <CommentSection 
-        postId={post._id} 
-        comments={comments} // Pass the mapped comments state
-        onCommentAdded={handleCommentAdded} 
-      />
+      {/* Comment Section - Solo se showComments è true */}
+      {showComments && (
+        <CommentSection
+          postId={post._id}
+          comments={comments} // Pass the mapped comments state
+          onCommentAdded={handleCommentAdded}
+        />
+      )}
     </div>
   );
 }
