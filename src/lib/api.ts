@@ -368,7 +368,7 @@ const notificationService = {
 
   async clearAllNotifications(): Promise<void> {
     // Assuming the backend returns null or a success indicator in the data field
-    const response = await axiosInstance.delete<NotificationResponse<null>>('/notifications/clear-all');
+    const response = await axiosInstance.post<NotificationResponse<null>>('/notifications/delete-all');
     // We don't need to return the data here
   },
 };

@@ -15,6 +15,8 @@ export interface User {
   bio?: string;
   gender?: string;
   role?: string;
+  following?: string[];
+  followers?: string[]; 
   createdAt?: string;
   updatedAt?: string;
 }
@@ -26,6 +28,7 @@ interface AuthContextType {
   logout: () => void;
   socket: Socket | null;
   signup: (formData: FormData) => Promise<void>;
+  updateUserFollowing: (following: string[]) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -79,13 +82,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     newSocket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason);
       if (reason === 'io server disconnect') {
-        // Server initiated disconnect
         toast.warning('Connection lost. Please refresh the page.');
       } else if (reason === 'transport close') {
-        // Transport closed
         toast.warning('Connection closed. Attempting to reconnect...');
       } else if (reason === 'ping timeout') {
-        // Ping timeout
         toast.warning('Connection timeout. Attempting to reconnect...');
       }
     });
@@ -124,15 +124,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Funzione updateUserFollowing dichiarata separatamente
+  const updateUserFollowing = (following: string[]) => {
+    if (user) {
+      const updatedUser = { ...user, following };
+      setUser(updatedUser);
+      apiService.setUser(updatedUser);
+    }
+  };
+
   const login = async (email: string, password: string) => {
     try {
       const response = await apiService.login(email, password);
       const { access_token, user: userData } = response;
       
-      // Set token and user through the API service
       apiService.setToken(access_token);
       
-      // Set user with all required fields
       const user: User = {
         _id: userData._id,
         name: userData.name,
@@ -143,6 +150,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         bio: userData.bio,
         gender: userData.gender,
         role: userData.role,
+        following: userData.following || [],
+        followers: userData.followers || [],
         createdAt: userData.createdAt,
         updatedAt: userData.updatedAt
       };
@@ -150,7 +159,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(user);
       apiService.setUser(user);
       
-      // Connect socket with the same token format
       connectSocket(access_token);
       
       toast.success('Login successful');
@@ -167,10 +175,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await apiService.signup(formData);
       const { access_token, user: userData } = response;
       
-      // Set token and user through the API service
       apiService.setToken(access_token);
       
-      // Set user with all required fields
       const user: User = {
         _id: userData._id,
         name: userData.name,
@@ -181,6 +187,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         bio: userData.bio,
         gender: userData.gender,
         role: userData.role,
+        following: userData.following || [],
+        followers: userData.followers || [],
         createdAt: userData.createdAt,
         updatedAt: userData.updatedAt
       };
@@ -188,7 +196,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(user);
       apiService.setUser(user);
       
-      // Connect socket with the same token format
       connectSocket(access_token);
       
       toast.success('Signup successful');
@@ -217,7 +224,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (decoded.exp && decoded.exp > currentTime) {
             const userData = apiService.getUser();
             if (userData) {
-              setUser(userData);
+              // Assicurati che following e followers siano array
+              const user: User = {
+                ...userData,
+                following: userData.following || [],
+                followers: userData.followers || []
+              };
+              setUser(user);
               connectSocket(token);
             } else {
               clearAuthData();
@@ -238,8 +251,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, socket }}>
-      {children}
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      login, 
+      signup, 
+      logout, 
+      socket,
+      updateUserFollowing 
+    }}>
+      {children}  
     </AuthContext.Provider>
   );
 }
@@ -250,4 +271,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-} 
+}
