@@ -1,19 +1,99 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Home, Users, User, LogOut, Search, MessageCircle, PlusCircle } from 'lucide-react';
+import { Home, Users, User, LogOut, Search, MessageCircle, PlusCircle, Users2 } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NotificationIcon } from './notifications/NotificationIcon';
 import { NotificationDropdown } from './notifications/NotificationDropdown';
 import { useNotificationNavigation } from '../hooks/useNotificationNavigation';
+import { apiService } from '../lib/api';
+import { Notification } from '@/types/notification';
+import { io, Socket } from 'socket.io-client';
+import { useTribe } from '../lib/tribe-context';
 
 export default function Navbar() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const { activeTribe } = useTribe();
+  const [socket, setSocket] = useState<Socket | null>(null);
   const handleNotificationClick = useNotificationNavigation();
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Initialize socket connection
+  useEffect(() => {
+    if (user?._id) {
+      const token = apiService.verifyToken();
+      if (token) {
+        console.log('Initializing socket connection...');
+        const newSocket = io('http://localhost:3001', {
+          auth: {
+            token: token
+          },
+          extraHeaders: {
+            'Authorization': `Bearer ${token}`
+          },
+          transports: ['websocket'],
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          timeout: 10000,
+          forceNew: true,
+          autoConnect: true
+        });
+
+        newSocket.on('connect', () => {
+          console.log('Socket connected successfully in Navbar');
+          setSocket(newSocket);
+        });
+
+        newSocket.on('connect_error', (error) => {
+          console.error('Socket connection error in Navbar:', error.message);
+        });
+
+        newSocket.on('disconnect', (reason) => {
+          console.log('Socket disconnected:', reason);
+          if (reason === 'io server disconnect') {
+            newSocket.connect();
+          }
+        });
+
+        newSocket.on('error', (error) => {
+          console.error('Socket error:', error);
+        });
+
+        return () => {
+          console.log('Cleaning up socket connection...');
+          if (newSocket.connected) {
+            newSocket.disconnect();
+          }
+        };
+      }
+    }
+  }, [user?._id]);
+
+  // Handle socket events
+  useEffect(() => {
+    if (socket?.connected) {
+      console.log('Setting up socket event listeners...');
+      
+      socket.on('notification', (notification: Notification) => {
+        console.log('Received new notification:', notification);
+        
+        // Handle only pending request acceptance
+        if(notification.type === 'TRIBE_MEMBERSHIP_ACCEPTED'){
+          console.log('Tribe membership accepted from pending request, updating tribe info...');
+          // The tribe context will handle the refresh
+        }
+      });
+
+      return () => {
+        console.log('Cleaning up socket event listeners...');
+        socket.off('notification');
+      };
+    }
+  }, [socket?.connected]);
 
   return (
     <>
@@ -58,6 +138,19 @@ export default function Navbar() {
               <MessageCircle className="h-6 w-6" />
               <span className="text-xs">Chat</span>
             </Link>
+            {activeTribe && (
+              <Link 
+                to={`/tribes/${activeTribe._id}`}
+                className={`flex flex-col items-center justify-center gap-1 transition-colors ${isActive(`/tribes/${activeTribe._id}`) ? 'text-purple-600' : 'text-gray-700 hover:text-purple-600'}`}
+              >
+                {activeTribe.profilePhoto ? (
+                  <img src={activeTribe.profilePhoto} alt={activeTribe.name} className="h-6 w-6 rounded-full object-cover" />
+                ) : (
+                  <Users2 className="h-6 w-6" />
+                )}
+                <span className="text-xs">Tribe</span>
+              </Link>
+            )}
             <Link 
               to="/profile" 
               className={`flex flex-col items-center justify-center gap-1 transition-colors ${isActive('/profile') ? 'text-purple-600' : 'text-gray-700 hover:text-purple-600'}`}
@@ -143,6 +236,23 @@ export default function Navbar() {
             <MessageCircle className="h-6 w-6" />
             <span>Chat</span>
           </Link>
+          {activeTribe && (
+            <Link 
+              to={`/tribes/${activeTribe._id}`}
+              className={`flex items-center gap-2 p-2 rounded-md transition-colors w-full ${
+                isActive(`/tribes/${activeTribe._id}`)
+                  ? 'bg-purple-100 text-purple-600'
+                  : 'text-gray-700 hover:bg-gray-100 hover:text-purple-600'
+              }`}
+            >
+              {activeTribe.profilePhoto ? (
+                <img src={activeTribe.profilePhoto} alt={activeTribe.name} className="h-6 w-6 rounded-full object-cover" />
+              ) : (
+                <Users2 className="h-6 w-6" />
+              )}
+              <span>{activeTribe.name}</span>
+            </Link>
+          )}
           <Link 
             to="/profile" 
             className={`flex items-center gap-2 p-2 rounded-md transition-colors w-full ${

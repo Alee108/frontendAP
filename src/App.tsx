@@ -7,6 +7,7 @@ import { Toaster } from 'sonner';
 import { Suspense, lazy } from 'react';
 import React from 'react';
 import { Home } from './pages/Home';
+import { TribeProvider } from './lib/tribe-context';
 
 // Lazy load pages for better performance
 const Login = lazy(() => import('./pages/Login'));
@@ -23,110 +24,112 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <NotificationProvider>
-          <Suspense
-            fallback={
-              <div className="flex h-screen items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <TribeProvider>
+          <NotificationProvider>
+            <Suspense
+              fallback={
+                <div className="flex h-screen items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                </div>
+              }
+            >
+              <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
+                <Routes>
+                  {/* Public routes */}
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<Signup />} />
+
+                  {/* Protected routes */}
+                  <Route
+                    path="/home"
+                    element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <Home />
+                        </Layout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/search"
+                    element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <Search />
+                        </Layout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/discover"
+                    element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <DiscoverTribes />
+                        </Layout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/tribes/:tribeId"
+                    element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <TribeProfile />
+                        </Layout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <Profile />
+                        </Layout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile/:userId"
+                    element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <Profile />
+                        </Layout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/create-post"
+                    element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <CreatePostPage />
+                        </Layout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/chat"
+                    element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <Chat />
+                        </Layout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Catch all other routes and redirect */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
               </div>
-            }
-          >
-            <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
-              <Routes>
-                {/* Public routes */}
-                <Route path="/" element={<Landing />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-
-                {/* Protected routes */}
-                <Route
-                  path="/home"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Home />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/search"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Search />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/discover"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <DiscoverTribes />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/tribes/:tribeId"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <TribeProfile />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/profile"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Profile />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/profile/:userId"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Profile />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/create-post"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <CreatePostPage />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/chat"
-                  element={
-                    <ProtectedRoute>
-                      <Layout>
-                        <Chat />
-                      </Layout>
-                    </ProtectedRoute>
-                  }
-                />
-
-                {/* Catch all other routes and redirect */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </div>
-          </Suspense>
-          <Toaster position="top-center" />
-        </NotificationProvider>
+            </Suspense>
+            <Toaster position="top-center" />
+          </NotificationProvider>
+        </TribeProvider>
       </AuthProvider>
     </Router>
   );

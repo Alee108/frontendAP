@@ -123,6 +123,9 @@ export interface User {
   bio?: string;
   gender?: string;
   role?: string;
+  tribeId?: string;
+  following?: string[];
+  followers?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -508,10 +511,7 @@ export const apiService = {
     return response.data;
   },
   
-  getUserMemberships: async (userId: string) => {
-    const response = await axiosInstance.get<Tribe[]>(`/membership/user/${userId}`);
-    return response.data;
-  },
+
 
   // Posts
   getRecommendedPosts: async (limit?: number) => {
@@ -822,6 +822,21 @@ export const apiService = {
   },
 
   ...notificationService, // Add notification service functions
+
+  async getUserTribe(userId: string): Promise<Tribe> {
+    const response = await axiosInstance.get(`/tribes/user/${userId}`);
+    return response.data;
+  },
+
+  async getUserMemberships(userId: string): Promise<Membership[]> {
+    const response = await axiosInstance.get(`/membership/user/${userId}`);
+    return response.data;
+  },
+
+  async getAllUserMemberships(userId: string): Promise<any[]> {
+    const response = await axiosInstance.get(`/membership/allbyuser/${userId}`);
+    return response.data;
+  },
 };
 
 export default axiosInstance;

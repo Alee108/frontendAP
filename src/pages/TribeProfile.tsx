@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { t } from 'node_modules/framer-motion/dist/types.d-CtuPurYT';
+import { useTribe } from '../lib/tribe-context';
 
 // Placeholder images
 const TRIBE_PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&h=200&q=80';
@@ -28,6 +29,7 @@ export default function TribeProfile() {
   const { tribeId } = useParams<{ tribeId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { refreshActiveTribe } = useTribe();
   const [tribe, setTribe] = useState<Tribe | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,7 @@ export default function TribeProfile() {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [promotingMemberId, setPromotingMemberId] = useState<string | null>(null);
   const [demotingMemberId, setDemotingMemberId] = useState<string | null>(null);
+  const [userMemberships, setUserMemberships] = useState<Membership[]>([]);
 
   // Calculate total active members including founder, moderators, and members
   const totalActiveMembers = tribeMembers.filter(m => m.status === 'ACTIVE').length;
@@ -60,36 +63,56 @@ export default function TribeProfile() {
   const hasPendingRequest = tribe?.memberships?.some(m => m.status === 'PENDING') || false;
   const isPrivate = tribe?.visibility === 'PRIVATE';
   const isClosed = tribe?.visibility === 'CLOSED';
-  //console.log('tribe',tribe, 'user', user);
+  
   const isFounderOfTribe = tribe && tribe.founder && tribe.founder._id && user && tribe.founder._id === user._id;
-  console.log('Tribe founder check:', {
-    tribeFounderId: tribe?.founder?._id,
-    userId: user?._id,
-    isFounderOfTribe
-  });
+  console.log(tribe)
   const isModerator = tribe?.memberships?.some(m => {
     const populatedMembership = m as unknown as PopulatedMembership;
     return populatedMembership.user?._id === user?._id && 
            populatedMembership.role === 'moderator' && 
            populatedMembership.status === 'ACTIVE';
   }) || false;
-  const isAlreadyInTribe = isFounderOfTribe || isMember;
+
+  // Check if user is in the current tribe
+  const isInCurrentTribe = isFounderOfTribe || isMember || isModerator;
+
+  // Check if user is in any tribe (for join button visibility)
+  const isInAnyTribe = userMemberships.some(m => m.status === 'ACTIVE') || false;
+
 
   const canManageRequests = isFounderOfTribe || isModerator;
   
-    const loadTribeMembers = async () => {
-      if (!tribeId) return;
-      setLoadingMembers(true);
-      try {
-        const members = await apiService.getTribeMembers(tribeId);
-        console.log(members)
-        setTribeMembers(members);
-      } catch (error) {
-        toast.error('Failed to load tribe members');
-      } finally {
-        setLoadingMembers(false);
-      }
-    };
+const fetchUserMemberships = async () => {
+  console.log("AAAAAAA VAMOSS")
+    if (!user?._id) return;
+    try {
+      const memberships = await apiService.getAllUserMemberships(user._id);
+      setUserMemberships(memberships);
+    } catch (error) {
+      toast.error('Failed to load user memberships');
+    }
+  };
+
+  // Load user memberships when component mounts
+  useEffect(() => {
+    if (user?._id) {
+      fetchUserMemberships();
+    }
+  }, [user?._id]);
+
+  const loadTribeMembers = async () => {
+    if (!tribeId) return;
+    setLoadingMembers(true);
+    try {
+      const members = await apiService.getTribeMembers(tribeId);
+      console.log(members)
+      setTribeMembers(members);
+    } catch (error) {
+      toast.error('Failed to load tribe members');
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
 
 
   // Load members when the modal is opened
@@ -251,63 +274,44 @@ export default function TribeProfile() {
   };
 
   const handleJoinTribe = async () => {
-    if (!tribeId || isClosed) return;
+    if (!tribeId) return;
     
-    setJoining(true);
     try {
-      if (tribe?.visibility === 'PRIVATE') {
-        await apiService.requestMembership(tribeId);
-        toast.success('Join request sent successfully');
-      } else {
-        await apiService.requestMembership(tribeId);
-        toast.success('Successfully joined the tribe!');
+      setJoining(true);
+      const response = await apiService.requestMembership(tribeId);
+      if (response) {
+        // Update local state
+        await fetchUserMemberships(); // Refresh user memberships
+        await loadTribeProfile(tribeId); // Refresh tribe data
+        await refreshActiveTribe(); // Refresh active tribe in context
+        
+        // Show success message
+        toast.success('Membership request sent successfully');
+        
+        // If the tribe is public, navigate to the tribe page
+        if (tribe?.visibility === 'PUBLIC') {
+          navigate(`/tribes/${tribeId}`);
+        } else {
+          // If private, stay on the page but show pending status
+          toast.info('Your request is pending approval');
+        }
       }
-      // Refresh tribe data to update membership status
-      const tribeData = await apiService.getTribeProfile(tribeId);
-      setTribe(tribeData);
     } catch (error) {
-      toast.error(tribe?.visibility === 'PRIVATE' 
-        ? 'Failed to send join request' 
-        : 'Failed to join tribe'
-      );
+      console.error('Error joining tribe:', error);
+      toast.error('Failed to join tribe');
     } finally {
       setJoining(false);
     }
   };
 
   const handleExitTribe = async () => {
-    if (!user || !tribeId || !tribe) return; // Add tribe check
-
-    setExiting(true);
     try {
-      if (isFounderOfTribe) {
-        // Se è il founder, chiudiamo l'operazione di chiusura tribe
-        await apiService.closeTribe(tribeId);
-        toast.success('Tribe has been closed. Members can still view posts but no new join requests will be accepted.');
-        // Aggiornare lo stato locale per mostrare la vista chiusa immediatamente
-        setTribe(prevTribe => prevTribe ? { ...prevTribe, status: 'CLOSED' } : null);
-        // NON reindirizzare immediatamente per i founder, così vedono la pagina aggiornata
-      } else {
-        // Se è un membro normale, usciamo dalla tribe
-        if (!user?._id) {
-          toast.error('User ID is missing.');
-          setExiting(false);
-          setShowExitDialog(false);
-          return;
-        }
-        await apiService.exitTribe(user._id, tribeId);
-        toast.success('Successfully left the tribe');
-        // Azzerare lo stato della tribe e dei post per riflettere l'uscita
-        setTribe(null);
-        setPosts([]);
-        // Reindirizza alla pagina Discover solo DOPO il successo dell'operazione e l'aggiornamento dello stato locale per i membri
-      }
-      navigate('/discover');
+      const response = await apiService.exitTribe(user?._id,tribeId);
+        await refreshActiveTribe();
+        navigate('/discover');
+      
     } catch (error) {
-      toast.error('Failed to exit tribe');
-    } finally {
-      setExiting(false);
-      setShowExitDialog(false);
+      console.error('Error exiting tribe:', error);
     }
   };
 
@@ -663,7 +667,7 @@ export default function TribeProfile() {
             </div>
 
             {/* Exit/Close Tribe Button (Founder: Close, Member/Moderator: Leave) */}
-            {(isAlreadyInTribe && !isClosed) && (
+            {(isInCurrentTribe && !isClosed) && (
               <div className="flex justify-center mt-6">
                 <Button
                   onClick={() => setShowExitDialog(true)}
@@ -684,28 +688,51 @@ export default function TribeProfile() {
             )}
 
             {/* Founder Info in top right */}
-            <div className="absolute top-8 right-8 flex items-center gap-2 bg-purple-50 px-4 py-2 rounded-full">
-              <div className="flex items-center gap-2">
-                {tribe.founder.profilePhoto ? (
-                  <img
-                    src={tribe.founder.profilePhoto}
-                    alt={tribe.founder.username}
-                    className="w-8 h-8 rounded-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = USER_PLACEHOLDER_IMAGE;
-                    }}
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                    <UserIcon className="w-5 h-5 text-purple-500" />
+            <div className="absolute top-8 right-8 flex flex-col items-end gap-4">
+              <div className="flex items-center gap-2 bg-purple-50 px-4 py-2 rounded-full">
+                <div className="flex items-center gap-2">
+                  {tribe.founder.profilePhoto ? (
+                    <img
+                      src={tribe.founder.profilePhoto}
+                      alt={tribe.founder.username}
+                      className="w-8 h-8 rounded-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = USER_PLACEHOLDER_IMAGE;
+                      }}
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                      <UserIcon className="w-5 h-5 text-purple-500" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{tribe.founder.username}</p>
+                    <p className="text-xs text-purple-600">Founder</p>
                   </div>
-                )}
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{tribe.founder.username}</p>
-                  <p className="text-xs text-purple-600">Founder</p>
                 </div>
               </div>
+
+              {/* Join Tribe Button - Only show if tribe is public and user is not in any tribe */}
+              {!isPrivate && !isInCurrentTribe && !isInAnyTribe && !isClosed && (
+                <Button
+                  onClick={handleJoinTribe}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                  disabled={joining}
+                >
+                  {joining ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Joining...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Join Tribe
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
           </div>

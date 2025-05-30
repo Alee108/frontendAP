@@ -4,6 +4,8 @@ import { apiService } from '../lib/api';
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { useTribe } from '../lib/tribe-context';
+import { useNavigate } from 'react-router-dom';
 
 interface TribeManagementProps {
   tribeId: string;
@@ -15,6 +17,8 @@ interface TribeManagementProps {
 export function TribeManagement({ tribeId, isFounder, isModerator, onTribeUpdate }: TribeManagementProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
+  const { clearActiveTribe } = useTribe();
+  const navigate = useNavigate();
 
   const handleCloseTribe = async () => {
     if (!isFounder) return;
@@ -22,8 +26,9 @@ export function TribeManagement({ tribeId, isFounder, isModerator, onTribeUpdate
     setIsLoading(true);
     try {
       await apiService.closeTribe(tribeId);
+      clearActiveTribe();
       toast.success('Tribe closed successfully');
-      onTribeUpdate();
+      navigate('/home');
     } catch (error) {
       toast.error('Failed to close tribe');
     } finally {
@@ -37,8 +42,9 @@ export function TribeManagement({ tribeId, isFounder, isModerator, onTribeUpdate
     setIsLoading(true);
     try {
       await apiService.exitTribe(user._id, tribeId);
+      clearActiveTribe();
       toast.success('Successfully exited tribe');
-      onTribeUpdate();
+      navigate('/home');
     } catch (error) {
       toast.error('Failed to exit tribe');
     } finally {
