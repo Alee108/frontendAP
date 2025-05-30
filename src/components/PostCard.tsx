@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Post } from '../types/post';
 import { formatDistanceToNow } from 'date-fns';
 import { Heart, MessageCircle, User, UserPlus, Trash2 } from 'lucide-react';
@@ -16,11 +16,21 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onPostUpdate }: PostCardProps) {
-  const { user } = useAuth();
+  const { user, updateUserFollowing } = useAuth();
   const navigate = useNavigate();
+  const isAlreadyFollowing = user?.following?.some(
+    (followingId: string) => followingId === post.userId._id
+  ) || false;
   const [isLiked, setIsLiked] = useState(post.likes?.includes(user?._id || '') || false);
-  const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(isAlreadyFollowing);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const following = user?.following?.some(
+      (followingId: string) => followingId === post.userId._id
+    ) || false;
+    setIsFollowing(following);
+  }, [user?.following, post.userId._id]);
 
   // Initialize comments state by mapping the incoming post.comments array.
   // We explicitly map fields from the actual data structure to the ApiCommentType structure.
@@ -61,17 +71,28 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
       onPostUpdate();
     } catch (error) {
       toast.error('Failed to update like status');
-    } finally {
     }
   };
 
   const handleFollow = async () => {
     try {
-      await apiService.followUser(post.userId._id);
-      setIsFollowing(true);
-      toast.success('Successfully followed user');
+      if (isFollowing) {
+        await apiService.unfollowUser(post.userId._id);
+        const newFollowing = (user?.following || []).filter(id => id !== post.userId._id);
+        updateUserFollowing(newFollowing);
+        setIsFollowing(false);
+        toast.success('Unfollowed successfully');
+      } else {
+        await apiService.followUser(post.userId._id);
+        const newFollowing = [...(user?.following || []), post.userId._id];
+        updateUserFollowing(newFollowing);
+        setIsFollowing(true);
+        toast.success('Followed successfully');
+      }
     } catch (error) {
+      console.error('Error following/unfollowing:', error);
       toast.error('Failed to follow user');
+      setIsFollowing(!isFollowing);
     }
   };
 
@@ -201,13 +222,26 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
             </AlertDialog>
           )}
 
-          {!isFollowing && user?._id !== post.userId._id && (
+          {user?._id !== post.userId._id && (
             <button
               onClick={handleFollow}
-              className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-colors ${
+                isFollowing
+                  ? 'bg-gray-500 hover:bg-gray-600 text-white'
+                  : 'bg-blue-500 hover:bg-blue-600 text-white'
+              }`}
             >
-              <UserPlus className="w-4 h-4" />
-              <span>Follow</span>
+              {isFollowing ? (
+                <>
+                  <User className="w-4 h-4" />
+                  <span>Unfollow</span>
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Follow</span>
+                </>
+              )}
             </button>
           )}
         </div>
@@ -250,4 +284,4 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
       />
     </div>
   );
-} 
+}
