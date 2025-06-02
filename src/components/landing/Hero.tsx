@@ -36,7 +36,7 @@ const Hero = () => {
       {/* Navigation bar */}
       <div className="absolute top-6 right-6 z-20 flex items-center space-x-4">
         <Link to="/login">
-          <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 backdrop-blur-sm">
+          <Button variant="outline" className="border-white/20  hover:bg-white/10 backdrop-blur-sm hover:text-white">
             Login
           </Button>
         </Link>
@@ -89,7 +89,17 @@ const Hero = () => {
               Find Your Tribe
             </Button>
           </Link>
-          <Button size="lg" variant="outline" className="border-2 border-white text-white hover:bg-white hover:text-purple-900 text-lg px-10 py-6 backdrop-blur-sm">
+          <Button 
+            size="lg" 
+            variant="outline" 
+            className="border-1 border-white text-purple-500 text-lg px-10 py-6 hover:bg-none hover:text-purple-900"
+            onClick={() => {
+              document.getElementById('how-it-works')?.scrollIntoView({ 
+                behavior: 'smooth',
+                block: 'start'
+              });
+            }}
+          >
             How It Works
           </Button>
         </div>

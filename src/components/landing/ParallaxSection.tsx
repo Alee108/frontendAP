@@ -68,12 +68,11 @@ const ParallaxSection = () => {
       <div className="relative z-10 max-w-6xl mx-auto px-4">
         <div className="text-center mb-16">
           <h2 className="text-5xl md:text-7xl font-bold text-white mb-8">
-            The Problem with
             <span className="block text-red-400">Everything, Everywhere</span>
           </h2>
           
           <p className="text-xl md:text-2xl text-gray-300 max-w-4xl mx-auto leading-relaxed">
-            You're in 47 Discord servers, 12 Slack workspaces, following 2,847 people on Twitter. 
+            You're in 47 Discord servers, 12 Slack workspaces, following 2,847 people on Insta🤬 
             <br className="hidden md:block" />
             <strong className="text-white">When did connecting become so... disconnected?</strong>
           </p>

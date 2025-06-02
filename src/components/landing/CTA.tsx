@@ -40,14 +40,14 @@ const CTA = () => {
           </span>
         </div>
         
-        <h2 className="text-5xl md:text-7xl font-bold mb-8 leading-tight">
+        <h2 className="text-5xl md:text-7xl font-bold m-0 leading-tight">
           Your Tribe is
-          <span className="block bg-gradient-to-r from-yellow-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent">
+          <span className="block bg-gradient-to-r from-yellow-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent pb-8">
             Waiting
           </span>
         </h2>
         
-        <p className="text-xl md:text-2xl mb-12 opacity-90 max-w-3xl mx-auto leading-relaxed">
+        <p className="text-xl md:text-2xl mb-12 opacity-90 max-w-3xl mx-auto leading-relaxed ">
           Stop spreading yourself thin. Stop chasing followers. 
           <br className="hidden md:block" />
           <strong>Start building something meaningful.</strong>
@@ -61,9 +61,6 @@ const CTA = () => {
             </Button>
           </Link>
           
-          <Button size="lg" variant="outline" className="border-2 border-white text-white hover:bg-white/10 text-xl px-12 py-8 backdrop-blur-sm transition-all duration-300">
-            Watch Demo
-          </Button>
         </div>
 
         {/* Social proof */}
@@ -83,9 +80,9 @@ const CTA = () => {
         </div>
         
         <p className="text-sm mt-12 opacity-75 max-w-2xl mx-auto">
-          Join for free • No credit card required • Leave anytime
+          Join for free • Leave anytime
           <br />
-          <span className="text-yellow-300">✨ Early access — invite only for now</span>
+          <span className="text-yellow-300">✨ Early access!!</span>
         </p>
       </div>
     </section>
