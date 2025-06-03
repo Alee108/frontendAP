@@ -124,12 +124,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Funzione updateUserFollowing dichiarata separatamente
-  const updateUserFollowing = (following: string[]) => {
+  const updateUserFollowing = async (following: string[]) => {
     if (user) {
       const updatedUser = { ...user, following };
       setUser(updatedUser);
       apiService.setUser(updatedUser);
+      // Update the user's following list in the backend
+      try {
+        await apiService.updateUser(user._id, { following });
+      } catch (error) {
+        console.error('Error updating following list:', error);
+        toast.error('Failed to update following list');
+      }
     }
   };
 

@@ -20,17 +20,20 @@ export default function Search() {
     if (query.trim()) {
       searchUsers(debouncedQuery);
     } else {
-      loadTopUsers();
+      loadRecommendedUsers();
     }
   }, [debouncedQuery]);
 
-  const loadTopUsers = async () => {
+  const loadRecommendedUsers = async () => {
     setLoading(true);
+    console.log('Chiamo loadRecommendedUsers');
     try {
-      const data = await apiService.getTopUsers();
+      const data = await apiService.getRecommendedUsers();
+      console.log('Recommended users:', data);
       setUsers(data);
     } catch (error) {
-      toast.error('Failed to load top users');
+      console.error('Errore recommended users:', error);
+      toast.error('Failed to load recommended users');
     } finally {
       setLoading(false);
     }
@@ -38,7 +41,7 @@ export default function Search() {
 
   const searchUsers = async (searchQuery: string) => {
     if (!searchQuery.trim()) {
-      loadTopUsers();
+      loadRecommendedUsers();
       return;
     }
 
@@ -68,9 +71,17 @@ export default function Search() {
         {user.name && user.surname && (
           <p className="text-gray-600 mb-2">{user.name} {user.surname}</p>
         )}
-        <div className="flex items-center gap-2 text-gray-500 mb-4">
-          <Users className="w-4 h-4" />
-          <span>{user.followers?.length || 0} followers</span>
+        <div className="flex flex-col gap-2 text-gray-500 mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            <span>{user.followers?.length || 0} followers</span>
+          </div>
+          {user.commonFollowers !== undefined && user.commonFollowers > 0 && (
+            <div className="flex items-center gap-2 text-purple-600">
+              <Users className="w-4 h-4" />
+              <span>{user.commonFollowers} mutual followers</span>
+            </div>
+          )}
         </div>
         <Button 
           onClick={(e) => {

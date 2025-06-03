@@ -128,6 +128,7 @@ export interface User {
   followers?: string[];
   createdAt?: string;
   updatedAt?: string;
+  commonFollowers?: number;
 }
 
 export interface Membership {
@@ -514,21 +515,11 @@ export const apiService = {
 
 
   // Posts
-  getRecommendedPosts: async (limit?: number) => {
-    try {
-      console.log('Fetching recommended posts...'); // Debug log
-      const response = await axiosInstance.get('/recommendations/posts', {
-        params: { limit }
-      });
-      console.log('Recommended posts response:', response.data); // Debug log
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching recommended posts:', error);
-      if (error.response) {
-        console.error('Error response:', error.response.data);
-      }
-      throw error;
-    }
+  getRecommendedPosts: async ( limit: number = 20): Promise<Post[]> => {
+    const response = await axiosInstance.get(`/recommendations/posts`, {
+      params: { limit }
+    });
+    return response.data;
   },
 
   getPostById: async (postId: string) => {
@@ -835,6 +826,11 @@ export const apiService = {
 
   async getAllUserMemberships(userId: string): Promise<any[]> {
     const response = await axiosInstance.get(`/membership/allbyuser/${userId}`);
+    return response.data;
+  },
+
+  async getRecommendedUsers(): Promise<User[]> {
+    const response = await axiosInstance.get<User[]>('/recommendations/users');
     return response.data;
   },
 };

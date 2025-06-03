@@ -51,6 +51,9 @@ export default function TribeProfile() {
   const [promotingMemberId, setPromotingMemberId] = useState<string | null>(null);
   const [demotingMemberId, setDemotingMemberId] = useState<string | null>(null);
   const [userMemberships, setUserMemberships] = useState<Membership[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Calculate total active members including founder, moderators, and members
   const totalActiveMembers = tribeMembers.filter(m => m.status === 'ACTIVE').length;
@@ -146,12 +149,7 @@ const fetchUserMemberships = async () => {
             liked: post.likes.includes(user?._id || '')
         }));
         setPosts(postsWithLikedStatus);
-
-        // Se la tribe è chiusa e l'utente non è il founder, reindirizza al discover
-        /*if (tribeData.visibility === 'CLOSED' && tribeData.founder._id !== user?._id) {
-          toast.info('This tribe is closed.');
-          navigate('/discover');
-        }*/
+        setHasMore(postsData.length === 20); // Assuming 20 is the default limit
 
         console.log('Tribe data loaded:', { tribeId, isFounderOfTribe: tribeData.founder._id === user?._id, isClosed: tribeData.visibility === 'CLOSED', tribeVisibility: tribeData.visibility });
       } catch (error) {
@@ -414,6 +412,57 @@ const fetchUserMemberships = async () => {
     }
   };
 
+  const loadMorePosts = async () => {
+    if (!hasMore || loadingMore || !tribeId) return;
+    
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const newPosts = await apiService.getRecommendedPosts(20);
+      
+      if (newPosts.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      const postsWithLikedStatus = newPosts.map(post => ({
+        ...post,
+        liked: post.likes.includes(user?._id || '')
+      }));
+
+      setPosts(prevPosts => [...prevPosts, ...postsWithLikedStatus]);
+      setPage(nextPage);
+      setHasMore(newPosts.length === 20); // Assuming 20 is the default limit
+    } catch (error) {
+      toast.error('Failed to load more posts');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Add intersection observer for infinite scrolling
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadMorePosts();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const loadMoreTrigger = document.getElementById('load-more-trigger');
+    if (loadMoreTrigger) {
+      observer.observe(loadMoreTrigger);
+    }
+
+    return () => {
+      if (loadMoreTrigger) {
+        observer.unobserve(loadMoreTrigger);
+      }
+    };
+  }, [hasMore, loadingMore]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -527,6 +576,12 @@ const fetchUserMemberships = async () => {
                             )}
                           </div>
                         ))}
+                        {/* Load more trigger */}
+                        <div id="load-more-trigger" className="col-span-full h-10 flex items-center justify-center">
+                          {loadingMore && (
+                            <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -739,72 +794,78 @@ const fetchUserMemberships = async () => {
         </div>
 
         {/* Only show posts section if user is a member or tribe is public */}
-        {(isMember || !isPrivate) && ( // Ensure posts are only shown to members or in public tribes
-            <div className="mt-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Posts</h2>
-                {posts.length === 0 ? (
-                    <p className="text-center text-gray-600">No posts yet</p>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {posts.map(post => (
-                            <div key={post._id} className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl border border-white/20">
-                                <div className="flex items-center gap-4 mb-4">
-                                    {post.userId?.profilePhoto ? (
-                                        <img
-                                            src={post.userId.profilePhoto}
-                                            alt={post.userId.username}
-                                            className="w-10 h-10 rounded-full object-cover"
-                                            onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                target.src = USER_PLACEHOLDER_IMAGE;
-                                            }}
-                                        />
-                                    ) : (
-                                        <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                                            <UserIcon className="w-6 h-6 text-purple-500" />
-                                        </div>
-                                    )}
-                                    <div>
-                                        <h3 className="font-semibold text-gray-900">{post.userId?.username || 'Unknown User'}</h3>
-                                        <p className="text-sm text-gray-500">{new Date(post.createdAt).toLocaleDateString()}</p>
-                                    </div>
-                                </div>
-
-                                {post.base64Image && (
-                                    <img
-                                        src={post.base64Image}
-                                        alt={post.description}
-                                        className="w-full h-48 object-cover rounded-xl mb-4"
-                                    />
-                                )}
-
-                                <p className="text-gray-700 mb-4">{post.description}</p>
-
-                                {post.location && (
-                                    <p className="text-sm text-gray-500">{post.location}</p>
-                                )}
-
-                                {/* Like and Comment Counts */}
-                                <div className="flex items-center gap-4 mt-4">
-                                    <div className="flex items-center gap-1 text-gray-600">
-                                        <Heart className={`h-5 w-5 cursor-pointer ${post.liked ? 'text-red-500 fill-red-500' : 'text-gray-500'}`} onClick={() => handleLike(post._id)} />
-                                        <span>{post.likes.length}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1 text-gray-600 cursor-pointer" onClick={() => setExpandedPost(expandedPost === post._id ? null : post._id)}>
-                                        <MessageCircle className="h-5 w-5" />
-                                        <span>{post.comments.length}</span>
-                                    </div>
-                                </div>
-
-                                {/* Comment Section */}
-                                {expandedPost === post._id && (
-                                    <CommentSection postId={post._id} comments={comments[post._id] || []} onCommentAdded={(comment) => handleCommentAdded(post._id, comment)} />
-                                )}
-                            </div>
-                        ))}
+        {(isMember || !isPrivate) && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Posts</h2>
+            {posts.length === 0 ? (
+              <p className="text-center text-gray-600">No posts yet</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {posts.map(post => (
+                  <div key={post._id} className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-xl border border-white/20">
+                    <div className="flex items-center gap-4 mb-4">
+                      {post.userId?.profilePhoto ? (
+                        <img
+                          src={post.userId.profilePhoto}
+                          alt={post.userId.username}
+                          className="w-10 h-10 rounded-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = USER_PLACEHOLDER_IMAGE;
+                          }}
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                          <UserIcon className="w-6 h-6 text-purple-500" />
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{post.userId?.username || 'Unknown User'}</h3>
+                        <p className="text-sm text-gray-500">{new Date(post.createdAt).toLocaleDateString()}</p>
+                      </div>
                     </div>
-                )}
-            </div>
+
+                    {post.base64Image && (
+                      <img
+                        src={post.base64Image}
+                        alt={post.description}
+                        className="w-full h-48 object-cover rounded-xl mb-4"
+                      />
+                    )}
+
+                    <p className="text-gray-700 mb-4">{post.description}</p>
+
+                    {post.location && (
+                      <p className="text-sm text-gray-500">{post.location}</p>
+                    )}
+
+                    {/* Like and Comment Counts */}
+                    <div className="flex items-center gap-4 mt-4">
+                      <div className="flex items-center gap-1 text-gray-600">
+                        <Heart className={`h-5 w-5 cursor-pointer ${post.liked ? 'text-red-500 fill-red-500' : 'text-gray-500'}`} onClick={() => handleLike(post._id)} />
+                        <span>{post.likes.length}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-gray-600 cursor-pointer" onClick={() => setExpandedPost(expandedPost === post._id ? null : post._id)}>
+                        <MessageCircle className="h-5 w-5" />
+                        <span>{post.comments.length}</span>
+                      </div>
+                    </div>
+
+                    {/* Comment Section */}
+                    {expandedPost === post._id && (
+                      <CommentSection postId={post._id} comments={comments[post._id] || []} onCommentAdded={(comment) => handleCommentAdded(post._id, comment)} />
+                    )}
+                  </div>
+                ))}
+                {/* Load more trigger */}
+                <div id="load-more-trigger" className="col-span-full h-10 flex items-center justify-center">
+                  {loadingMore && (
+                    <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Members List Dialog */}

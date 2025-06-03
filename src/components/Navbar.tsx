@@ -23,7 +23,7 @@ export default function Navbar() {
 
   // Initialize socket connection
   useEffect(() => {
-    if (user?._id && !socket) {  // Only create socket if it doesn't exist
+    if (user?._id) {
       const token = apiService.verifyToken();
       if (token) {
         console.log('Initializing socket connection...');
@@ -39,7 +39,7 @@ export default function Navbar() {
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
           timeout: 10000,
-          forceNew: false,  // Changed to false to prevent new connections
+          forceNew: true,
           autoConnect: true
         });
 
@@ -71,7 +71,7 @@ export default function Navbar() {
         };
       }
     }
-  }, [user?._id, socket]);  // Added socket to dependencies
+  }, [user?._id]);
 
   // Handle socket events
   useEffect(() => {

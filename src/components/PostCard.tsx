@@ -24,6 +24,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
   ) || false;
   
   const [isLiked, setIsLiked] = useState(post.likes?.includes(user?._id || '') || false);
+  const [likesCount, setLikesCount] = useState(post.likes?.length || 0);
   const [isFollowing, setIsFollowing] = useState(isAlreadyFollowing);
   const [isDeleting, setIsDeleting] = useState(false);
   
@@ -70,11 +71,12 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
     try {
       if (isLiked) {
         await apiService.unlikePost(post._id);
+        setLikesCount(prev => prev - 1);
       } else {
         await apiService.likePost(post._id);
+        setLikesCount(prev => prev + 1);
       }
       setIsLiked(!isLiked);
-      onPostUpdate();
     } catch (error) {
       toast.error('Failed to update like status');
     }
@@ -85,13 +87,13 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
       if (isFollowing) {
         await apiService.unfollowUser(post.userId._id);
         const newFollowing = (user?.following || []).filter(id => id !== post.userId._id);
-        updateUserFollowing(newFollowing);
+        await updateUserFollowing(newFollowing);
         setIsFollowing(false);
         toast.success('Unfollowed successfully');
       } else {
         await apiService.followUser(post.userId._id);
         const newFollowing = [...(user?.following || []), post.userId._id];
-        updateUserFollowing(newFollowing);
+        await updateUserFollowing(newFollowing);
         setIsFollowing(true);
         toast.success('Followed successfully');
       }
@@ -134,14 +136,13 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
 
   const handleCommentAdded = (comment: ApiCommentType) => {
     // Aggiorna lo stato dei commenti aggiungendo il nuovo commento in cima
-    // Assuming the received 'comment' already matches the frontend Comment type (ApiCommentType)
     setComments(prev => [comment, ...prev]);
     
     // Mostra automaticamente i commenti quando ne viene aggiunto uno nuovo
     setShowComments(true);
     setHasNewComment(true);
     
-    // Aggiorna il post per aggiornare il contatore (richiedendo i post aggiornati dall'API)
+    // Aggiorna il post solo quando viene aggiunto un commento
     onPostUpdate();
   };
 
@@ -265,14 +266,16 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
       </div>
 
       {/* Post Content */}
-      <p className="mb-4">{post.description}</p>
-      {post.base64Image && (
-        <img
-          src={post.base64Image}
-          alt="Post content"
-          className="w-full rounded-lg mb-4 object-contain"
-        />
-      )}
+      <div className="mb-4">
+        {post.description && <p className="mb-4">{post.description}</p>}
+        {post.base64Image && (
+          <img
+            src={post.base64Image}
+            alt="Post content"
+            className="w-full rounded-lg mb-4 object-contain"
+          />
+        )}
+      </div>
 
       {/* Like and Comment Counts */}
       <div className="flex items-center gap-4 mb-4">
@@ -281,7 +284,7 @@ export function PostCard({ post, onPostUpdate }: PostCardProps) {
           className={`flex items-center gap-1 ${isLiked ? 'text-red-500' : 'text-gray-500'} hover:text-red-500 transition-colors`}
         >
           <Heart className={isLiked ? 'fill-current' : ''} />
-          <span>{post.likes.length}</span>
+          <span>{likesCount}</span>
         </button>
         
         <button
