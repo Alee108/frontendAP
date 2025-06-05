@@ -1,73 +1,63 @@
-# Welcome to your Lovable project
+# Tribe
 
-## Project info
+Tribe is a  social network that enables users to connect, share, and engage with communities (tribes). Built with React and TypeScript, hopefully it offers a seamless and intuitive user experience for social networking.
 
-**URL**: https://lovable.dev/projects/78817e27-4f34-43c6-bf43-bad68175806d
+## Features
 
-## How can I edit this code?
+- **User Authentication**: Secure login and signup system
+- **Tribe Management**: Create, join, and discover tribes
+- **Social Feed**: View and interact with posts from your tribes
+- **Profile System**: Customizable user profiles
+- **Real-time Chat**: Communicate with other members
+- **Search Functionality**: Find tribes and users easily
+- **Responsive Design**: Works seamlessly across all devices
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend Framework**: React with TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS with shadcn-ui components
+- **Routing**: React Router
+- **State Management**: React Context API
+- **Notifications**: Sonner toast notifications
+- **Code Quality**: ESLint and TypeScript for type safety
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/78817e27-4f34-43c6-bf43-bad68175806d) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js (Latest LTS version recommended)
+- npm (comes with Node.js)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
+1. Clone the repository:
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+git clone <repository-url>
+cd frontendAP
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+2. Install dependencies:
+```sh
+npm install
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+3. Start the development server:
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The application will be available at `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Project Structure
 
-**Use GitHub Codespaces**
+- `/src`
+  - `/components`: Reusable UI components
+  - `/pages`: Main application pages
+  - `/lib`: Core functionality and context providers
+  - `/contexts`: React context providers
+  - `/types`: TypeScript type definitions
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-## What technologies are used for this project?
 
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/78817e27-4f34-43c6-bf43-bad68175806d) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+For any kind of help, please contact us.
